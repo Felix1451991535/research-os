@@ -1,0 +1,63 @@
+[
+  {
+    "id": "http://zotero.org/users/1234567/items/ABCD2345",
+    "type": "article-journal",
+    "title": "Heart rate variability in intensive care: a synthetic test record",
+    "container-title": "Journal of Synthetic Cardiology",
+    "author": [{"family": "Zhang", "given": "Wei"}, {"family": "Müller", "given": "Anna"}],
+    "issued": {"date-parts": [[2021, 3, 4]]},
+    "DOI": "https://doi.org/10.5555/SYN.0001",
+    "note": "PMID: 34000001\nPMCID: PMC8000001",
+    "abstract": "Synthetic abstract.",
+    "URL": "https://example.org/syn1",
+    "keyword": "ECG, HRV"
+  },
+  {
+    "id": "http://zotero.org/users/1234567/items/EFGH6789",
+    "type": "article",
+    "title": "心电图深度学习综述（合成测试条目）",
+    "author": [{"family": "李", "given": "明"}],
+    "issued": {"raw": "Spring 2023"},
+    "note": "arXiv: 2301.01234v2"
+  },
+  {
+    "id": "http://zotero.org/groups/987654/items/JKLM2345",
+    "type": "book",
+    "title": "Synthetic Book of Biostatistics",
+    "ISBN": "978-0-306-40615-7 0-306-40615-2",
+    "issued": {"date-parts": [["2019"]]}
+  },
+  {
+    "id": "http://zotero.org/users/local/AbCd1234/items/NPQR2345",
+    "type": "chapter",
+    "title": "A chapter from a local library",
+    "container-title": "Edited Synthetic Volume",
+    "author": [{"literal": "Synthetic Consortium"}],
+    "issued": {"date-parts": [[1]]},
+    "DOI": "",
+    "abstract": "   "
+  },
+  {
+    "id": "smith2020citekey",
+    "type": "paper-conference",
+    "title": "Conference paper with a citation-key id",
+    "DOI": "doi:10.5555/Syn.0005"
+  },
+  {
+    "id": "http://zotero.org/users/1234567/items/ABCD2345",
+    "type": "article-journal",
+    "title": "Heart rate variability in intensive care: a synthetic test record",
+    "container-title": "Journal of Synthetic Cardiology",
+    "author": [{"family": "Zhang", "given": "Wei"}, {"family": "Müller", "given": "Anna"}],
+    "issued": {"date-parts": [[2021, 3, 4]]},
+    "DOI": "https://doi.org/10.5555/SYN.0001",
+    "note": "PMID: 34000001\nPMCID: PMC8000001",
+    "abstract": "Synthetic abstract.",
+    "URL": "https://example.org/syn1",
+    "keyword": "ECG, HRV"
+  },
+  {
+    "id": "http://zotero.org/users/1234567/items/STUV2345",
+    "type": "article-journal"
+  }
+]

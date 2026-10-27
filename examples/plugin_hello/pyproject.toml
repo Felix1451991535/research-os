@@ -1,0 +1,33 @@
+[project]
+name = "researchos-plugin-hello"
+version = "0.1.0"
+description = "Reference third-party plugin for Research OS: one of each extension point, offline-testable."
+requires-python = ">=3.11"
+dependencies = ["researchos>=0.1"]   # only researchos.contracts / researchos.sdk are imported
+
+[project.entry-points."researchos.plugins"]
+researchos_plugin_hello = "researchos_plugin_hello:MANIFEST"
+
+[project.entry-points."researchos.datasources"]
+hello_crossref = "researchos_plugin_hello.source:CrossrefLikeSource"
+hello_synthetic = "researchos_plugin_hello.dataset:SyntheticWindows"
+
+[project.entry-points."researchos.importers"]
+hello_open_importer = "researchos_plugin_hello.importer:OpenAccessImporter"
+hello_ris = "researchos_plugin_hello.importer:RisFileImporter"
+
+[project.entry-points."researchos.exporters"]
+hello_plaintext = "researchos_plugin_hello.exporter:PlainTextExporter"
+
+[project.entry-points."researchos.tools"]
+hello_word_count = "researchos_plugin_hello.tool:word_count"
+
+[project.entry-points."researchos.templates"]
+hello_centroid = "researchos_plugin_hello:template_package"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/researchos_plugin_hello"]

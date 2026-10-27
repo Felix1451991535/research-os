@@ -1,0 +1,8 @@
+{
+  "id": "planted", "version": "1", "entry": "run.py",
+  "description": "Planted-effect bench: known surface (lr main effect + interior optimum, lr x batch interaction, null dropout, NaN region lr>0.3 & batch<32). Shuffled-label control -> chance (1/3).",
+  "params_schema": {"type": "object", "properties": {"lr": {"type": "number"}, "batch": {"type": "number"},
+                    "dropout": {"type": "number"}}, "additionalProperties": false},
+  "metrics": [{"name": "score", "split": "search_val", "verification": "self_reported", "range": [0, 1]}],
+  "task": {"type": "classification", "n_classes": 3}
+}

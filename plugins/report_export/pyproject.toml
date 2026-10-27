@@ -1,0 +1,50 @@
+[project]
+name = "researchos-plugin-report_export"
+version = "0.1.0"
+description = "Research OS contracts 1.2 report_export plugin"
+requires-python = ">=3.11,<3.14"
+dependencies = ["researchos>=0.1", "python-docx>=1.2,<2", "python-pptx>=1.0,<2", "jsonschema>=4.26"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.17", "mypy>=2.4", "build", "hatchling"]
+
+[project.entry-points."researchos.plugins"]
+researchos_plugin_report_export = "researchos_plugin_report_export:MANIFEST"
+
+[project.entry-points."researchos.exporters"]
+report_docx = "researchos_plugin_report_export.exporters:DocxExporter"
+report_latex = "researchos_plugin_report_export.exporters:LatexExporter"
+report_slides = "researchos_plugin_report_export.slides:SlidesExporter"
+
+[tool.uv.sources]
+researchos = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/researchos_plugin_report_export"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+strict = true
+follow_imports = "silent"
+follow_untyped_imports = true
+native_parser = false
+
+[[tool.mypy.overrides]]
+module = ["bibtexparser.*", "sklearn.*", "jsonschema.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

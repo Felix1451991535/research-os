@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "about": "Fixed research regression self-test (approved addition, ADR-188). Each item names the existing test that proves it; rerun after any agent/harness/model-routing change. Mock provider only, no paid calls, no network.",
+  "items": [
+    {"id": "ST-01", "area": "feasibility", "proves": "status per dimension from recorded facts; no invented prior work", "test": "tests/test_feasibility.py::test_feasibility_from_recorded_facts"},
+    {"id": "ST-02", "area": "feasibility", "proves": "time estimate only from a comparable workload (review #68)", "test": "tests/test_feasibility.py::test_68_time_needs_a_comparable_workload"},
+    {"id": "ST-03", "area": "gap map", "proves": "covered / thin / gap / contested / weak cells from verified claims", "test": "tests/test_gap_map.py::test_gap_map_cells"},
+    {"id": "ST-04", "area": "decisions", "proves": "linked, immutable records; support recomputed when evidence fails", "test": "tests/test_decisions.py::test_decision_support_links_and_supersede"},
+    {"id": "ST-05", "area": "decisions", "proves": "unknown and other-project links rejected", "test": "tests/test_decisions.py::test_bad_unknown_and_foreign_links_are_rejected"},
+    {"id": "ST-06", "area": "methods checklist", "proves": "items page-cited from this paper; every gap listed", "test": "tests/test_methods_checklist.py::test_checklist_cites_pages_and_lists_missing_conditions"},
+    {"id": "ST-07", "area": "methods checklist", "proves": "unverified is not reported as absent from the paper (review #67)", "test": "tests/test_methods_checklist.py::test_67_unverified_is_not_reported_as_absent_from_the_paper"},
+    {"id": "ST-08", "area": "cited QA", "proves": "no evidence -> insufficient material without a model call", "test": "tests/test_m1_qa.py::test_no_evidence_means_no_model_call"},
+    {"id": "ST-09", "area": "citation/number gates", "proves": "final export refused until citations and numbers resolve", "test": "tests/test_m6_docs.py::test_final_export_refused_then_passes"},
+    {"id": "ST-10", "area": "citation/number gates", "proves": "free numbers are not hidden by exemptions", "test": "tests/test_m6_docs.py::test_number_gate_exemptions_do_not_hide_data"},
+    {"id": "ST-11", "area": "egress", "proves": "declared local_only data never reach a cloud provider", "test": "tests/test_egress.py::test_declared_local_only_data_never_reaches_cloud"},
+    {"id": "ST-12", "area": "egress", "proves": "planted restricted payload detected without declaration", "test": "tests/test_egress.py::test_planted_payload_is_detected_without_declaration"},
+    {"id": "ST-13", "area": "egress", "proves": "restricted tool output of unknown provenance stays local (review #47)", "test": "tests/test_egress_leaks.py::test_47_tool_output_of_unknown_provenance_never_reaches_cloud"},
+    {"id": "ST-14", "area": "cost", "proves": "exhausted budget rejects before any provider call", "test": "tests/test_m1_gateway.py::test_budget_exhausted_rejects_without_calling"},
+    {"id": "ST-15", "area": "leakage", "proves": "planted random-window split leak is detected", "test": "tests/test_m2_experiments.py::test_random_window_split_leak_detected"},
+    {"id": "ST-16", "area": "study protocol", "proves": "planted effects recovered, null factor not reported, shuffled-label control near chance", "test": "tests/test_m4_study.py::test_full_protocol_on_planted_surface"},
+    {"id": "ST-17", "area": "advisor", "proves": "ablation attributes the planted effect on paired validation seeds", "test": "tests/test_ablation.py::test_ablation_attributes_the_planted_effect"},
+    {"id": "ST-18", "area": "advisor", "proves": "failed configurations are never proposed again (review #59)", "test": "tests/test_advisor_review.py::test_59_study_never_reproposes_failed_configurations"},
+    {"id": "ST-19", "area": "synthetic EEG", "proves": "held-out responders decode, non-responders do not (known truth)", "test": "plugins/physio_signals/tests/test_synth_eeg.py::test_pipeline_recovers_planted_responders"},
+    {"id": "ST-20", "area": "synthetic EEG", "proves": "the artifact check flags exactly the planted artifact windows", "test": "plugins/physio_signals/tests/test_synth_eeg.py::test_planted_artifacts_are_found_exactly"},
+    {"id": "ST-21", "area": "leakage", "proves": "CSP spatial filters fit on training data only", "test": "plugins/physio_signals/tests/test_eeg.py::test_csp_filters_are_fit_on_train_only"}
+  ]
+}

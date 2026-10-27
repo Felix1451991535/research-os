@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/* Design tokens (HARDENING #10, OWNER UI QUALITY): semantic colors, one UI type scale, light + dark.
+   Components use ONLY these tokens — no ad-hoc colors or font sizes. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.21 0.02 255);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.955 0.006 250);
+  --muted-foreground: oklch(0.50 0.02 255);
+  --primary: oklch(0.45 0.13 255);
+  --primary-foreground: oklch(0.985 0 0);
+  --accent: oklch(0.94 0.02 255);
+  --accent-foreground: oklch(0.30 0.08 255);
+  --destructive: oklch(0.55 0.20 27);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.55 0.13 155);
+  --warning: oklch(0.70 0.15 75);
+  --info: oklch(0.58 0.12 235);
+  --border: oklch(0.91 0.008 250);
+  --ring: oklch(0.55 0.13 255);
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: oklch(0.17 0.012 255);
+  --foreground: oklch(0.95 0.005 250);
+  --card: oklch(0.21 0.014 255);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.25 0.014 255);
+  --muted-foreground: oklch(0.70 0.015 250);
+  --primary: oklch(0.70 0.12 255);
+  --primary-foreground: oklch(0.17 0.012 255);
+  --accent: oklch(0.28 0.03 255);
+  --accent-foreground: oklch(0.90 0.03 255);
+  --destructive: oklch(0.65 0.19 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.70 0.13 155);
+  --warning: oklch(0.80 0.14 80);
+  --info: oklch(0.72 0.11 235);
+  --border: oklch(0.30 0.014 255);
+  --ring: oklch(0.70 0.12 255);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, monospace;
+  /* UI type scale: caption < body-sm < body < title < heading < display */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-body-sm: 0.8125rem;
+  --text-body-sm--line-height: 1.25rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+  --text-title: 1.0625rem;
+  --text-title--line-height: 1.5rem;
+  --text-heading: 1.375rem;
+  --text-heading--line-height: 1.875rem;
+  --text-display: 1.875rem;
+  --text-display--line-height: 2.25rem;
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  :focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+}

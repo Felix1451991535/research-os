@@ -1,0 +1,37 @@
+[
+  {
+    "key": "NPQR2345",
+    "version": 3,
+    "library": {"type": "user", "id": 1234567, "name": "synthetic"},
+    "meta": {},
+    "data": {
+      "key": "NPQR2345",
+      "version": 3,
+      "itemType": "bookSection",
+      "title": "A chapter from a local library",
+      "creators": [{"creatorType": "author", "name": "Synthetic Consortium"}],
+      "bookTitle": "Edited Synthetic Volume",
+      "date": "",
+      "rights": "CC BY 4.0",
+      "tags": [],
+      "collections": []
+    }
+  },
+  {
+    "key": "ZZZZ2345",
+    "version": 13,
+    "library": {"type": "user", "id": 1234567, "name": "synthetic"},
+    "meta": {},
+    "data": {
+      "key": "ZZZZ2345",
+      "version": 13,
+      "parentItem": "ABCD2345",
+      "itemType": "attachment",
+      "linkMode": "imported_file",
+      "title": "Full Text PDF",
+      "contentType": "application/pdf",
+      "tags": [],
+      "collections": []
+    }
+  }
+]

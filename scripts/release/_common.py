@@ -1,0 +1,57 @@
+"""Shared helpers of the release scripts (ADR-225). The version is pyproject.toml's (ADR-222, read through
+researchos.__version__); the GitHub owner/repo come from the default `Settings.update_feed_url` only."""
+
+from __future__ import annotations
+
+import json
+import re
+import shlex
+import subprocess
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from researchos import __version__
+from researchos.kernel.config import Settings
+from researchos.services.ops.updater import asset_name
+
+ROOT = Path(__file__).resolve().parents[2]
+RELEASE_DIR = ROOT / "release"
+FEED_URL: str = Settings.update_feed_url  # the dataclass default: https://github.com/<o>/<r>/releases/latest/...
+_FEED_PATH = re.compile(r"^/([^/]+)/([^/]+)/releases/latest/download/latest\.json$")
+
+
+def github_repo(feed_url: str = FEED_URL) -> str:
+    """'<owner>/<repo>' of a GitHub 'latest release' feed URL."""
+    u = urlsplit(feed_url)
+    m = _FEED_PATH.match(u.path)
+    if u.hostname != "github.com" or m is None:
+        raise ValueError(f"not a GitHub latest-release feed URL: {feed_url}")
+    return f"{m.group(1)}/{m.group(2)}"
+
+
+def download_url(version: str, feed_url: str = FEED_URL) -> str:
+    """The URL GitHub serves a release asset under: .../releases/download/v<version>/<asset>."""
+    return f"https://github.com/{github_repo(feed_url)}/releases/download/v{version}/{asset_name(version)}"
+
+
+def default_exe(version: str = __version__) -> Path:
+    return RELEASE_DIR / asset_name(version)
+
+
+def sha256_line(digest: str, name: str) -> str:
+    """sha256sum format: '<hex>  <name>'."""
+    return f"{digest}  {name}\n"
+
+
+def write_json(data: dict[str, str], path: Path) -> Path:
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def show(cmd: list[str]) -> str:
+    return shlex.join(cmd)
+
+
+def run(cmd: list[str], cwd: Path = ROOT) -> str:
+    """Run a command (no shell), fail loudly, return its stdout."""
+    return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()

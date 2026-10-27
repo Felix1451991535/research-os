@@ -1,0 +1,23 @@
+# runtime data and local configuration
+data/
+*.bak
+# build outputs and release artifacts
+/release/
+apps/web/dist/
+*.tsbuildinfo
+# environments and caches
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+# local logs
+*.log
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

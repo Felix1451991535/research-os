@@ -1,0 +1,27 @@
+{
+  "message": {
+    "items": [
+      {
+        "DOI": "https://doi.org/10.5555/SYNTHETIC",
+        "title": [
+          "Synthetic sensor study"
+        ],
+        "author": [
+          {
+            "given": "Test",
+            "family": "Author"
+          }
+        ],
+        "issued": {
+          "date-parts": [
+            [
+              2020
+            ]
+          ]
+        }
+      }
+    ],
+    "total-results": 1
+  },
+  "_fixture": "Original SYNTHETIC test data, CC0-1.0; not real papers."
+}

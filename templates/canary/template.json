@@ -1,0 +1,38 @@
+{
+ "id": "canary",
+ "version": "1",
+ "entry": "run.py",
+ "description": "Built-in canary sweep (ARCHITECTURE 6.7): deliberately faulty modes ok | nan | diverge | hang | misreport | read_test | resplit | crash. Synthetic data only.",
+ "params_schema": {
+  "type": "object",
+  "properties": {
+   "mode": {
+    "type": "string"
+   },
+   "lr": {
+    "type": "number"
+   }
+  },
+  "required": [
+   "mode"
+  ],
+  "additionalProperties": false
+ },
+ "metrics": [
+  {
+   "name": "macro_f1",
+   "verification": "recomputed",
+   "range": [
+    0,
+    0.99
+   ]
+  }
+ ],
+ "task": {
+  "type": "classification",
+  "n_classes": 3
+ },
+ "requires": [
+  "numpy"
+ ]
+}

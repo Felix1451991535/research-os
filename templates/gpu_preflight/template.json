@@ -1,0 +1,8 @@
+{
+  "id": "gpu_preflight", "version": "1", "entry": "run.py",
+  "description": "GPU preflight (baseline §7): device facts, matmul, backward, mini-batch training, checkpoint save/resume. is_available alone is not a pass.",
+  "params_schema": {"type": "object", "properties": {}, "additionalProperties": false},
+  "resource_class": "gpu",
+  "metrics": [{"name": "preflight_pass", "split": "meta", "verification": "self_reported"}],
+  "requires": ["torch"]
+}

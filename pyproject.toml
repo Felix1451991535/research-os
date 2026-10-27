@@ -1,0 +1,147 @@
+[project]
+name = "researchos"
+version = "0.1.3"
+description = "Research OS: personal evidence-backed research workbench (local backend + PWA)"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "httpx>=0.27",
+    "pypdf>=5.0",
+    "bcrypt>=4.1",
+    "python-multipart>=0.0.9",
+    "cryptography>=42",
+    "psutil>=7.2.2",
+    "send2trash>=2.1.0",
+    "jsonschema>=4.26.0",
+    "tzdata>=2026.5",
+    "packaging>=26.3",
+]
+
+[project.optional-dependencies]
+experiments = [
+    "numpy>=1.26",
+    "optuna>=5.0.0",
+    "scikit-learn>=1.5",
+    "statsmodels>=0.15.0",
+    "matplotlib>=3.8",  # run figures (ADR-193); already locked via mne
+]
+# Merged plugins (plugins/<name>/, uv workspace members). Installing = enabling their entry points; see plugins/README.md.
+plugins = [
+    "researchos-plugin-litsearch",
+    "researchos-plugin-har-datasets",
+    "researchos-plugin-report-export",
+    "researchos-plugin-physio-signals[template]",
+    "researchos-plugin-zotero-import[safe-xml]",
+    "researchos-plugin-diag-stats[survival]",
+    "researchos-plugin-medimg-dicom",
+]
+# GPU/CPU torch is installed separately via the official PyTorch selector (see docs/OPS.md).
+dev = [
+    "pytest>=8",
+    "pypdf>=5.0",
+    "reportlab>=4.0",
+    "ruff>=0.17.0",
+    "mypy>=2.4.0",
+    "import-linter>=2.15",
+    "bibtexparser>=1.4,<2",
+    "python-docx>=1.2,<2",
+    "scikit-learn>=1.5",
+    "defusedxml>=0.7",
+]
+
+[project.scripts]
+researchos-api = "researchos.app.cli:run"
+researchos-worker = "researchos_worker.main:run"
+
+[tool.uv.workspace]
+members = ["plugins/*"]
+
+[tool.uv.sources]
+researchos-plugin-litsearch = { workspace = true }
+researchos-plugin-har-datasets = { workspace = true }
+researchos-plugin-report-export = { workspace = true }
+researchos-plugin-physio-signals = { workspace = true }
+researchos-plugin-zotero-import = { workspace = true }
+researchos-plugin-diag-stats = { workspace = true }
+researchos-plugin-medimg-dicom = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["services/api/researchos", "workers/researchos_worker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["services/api", "workers", "tests"]
+extend-exclude = ["apps", "templates"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C90", "SIM", "S"]
+ignore = ["S101", "S603", "S607", "S608", "S311", "SIM105"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.File", "fastapi.Form"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = ["services/api", "workers"]
+packages = ["researchos", "researchos_worker"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["researchos.contracts.*", "researchos.kernel.*", "researchos.platform.*"]
+strict = true
+
+[tool.importlinter]
+root_packages = ["researchos", "researchos_worker"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layering: worker|app > api > services > kernel|platform > contracts"
+type = "layers"
+layers = [
+    "researchos_worker | researchos.app",
+    "researchos.api",
+    "researchos.services",
+    "researchos.kernel | researchos.platform",
+    "researchos.contracts",
+]
+containers = []
+
+[[tool.importlinter.contracts]]
+name = "Worker never imports the HTTP layer"
+type = "forbidden"
+source_modules = ["researchos_worker"]
+forbidden_modules = ["researchos.api"]
+
+[[tool.importlinter.contracts]]
+name = "SDK (plugin-facing) depends only on contracts"
+type = "forbidden"
+source_modules = ["researchos.sdk"]
+forbidden_modules = ["researchos.kernel", "researchos.services", "researchos.api", "researchos.app", "researchos.platform"]
+
+[[tool.importlinter.contracts]]
+name = "Contracts do no I/O and import no implementation"
+type = "forbidden"
+source_modules = ["researchos.contracts"]
+forbidden_modules = ["researchos.kernel", "researchos.services", "researchos.api", "researchos.app", "researchos.platform", "sqlite3", "httpx", "fastapi"]
+allow_indirect_imports = true

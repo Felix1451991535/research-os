@@ -1,0 +1,77 @@
+{
+ "id": "har_baselines",
+ "version": "1",
+ "entry": "run.py",
+ "description": "UCI HAR baselines on the 561 engineered features: logistic regression + random forest. Scaling is fit on train only.",
+ "params_schema": {
+  "type": "object",
+  "properties": {
+   "rf_trees": {
+    "type": "integer",
+    "minimum": 10,
+    "maximum": 1000
+   },
+   "lr_c": {
+    "type": "number",
+    "exclusiveMinimum": 0
+   }
+  },
+  "additionalProperties": false
+ },
+ "metrics": [
+  {
+   "name": "lr.macro_f1",
+   "verification": "recomputed",
+   "range": [
+    0,
+    1
+   ]
+  },
+  {
+   "name": "rf.macro_f1",
+   "verification": "recomputed",
+   "range": [
+    0,
+    1
+   ]
+  },
+  {
+   "name": "lr.latency_b1_p50",
+   "verification": "self_reported",
+   "unit": "ms"
+  },
+  {
+   "name": "lr.latency_b1_p95",
+   "verification": "self_reported",
+   "unit": "ms"
+  },
+  {
+   "name": "lr.model_bytes",
+   "verification": "self_reported",
+   "unit": "bytes"
+  },
+  {
+   "name": "rf.latency_b1_p50",
+   "verification": "self_reported",
+   "unit": "ms"
+  },
+  {
+   "name": "rf.latency_b1_p95",
+   "verification": "self_reported",
+   "unit": "ms"
+  },
+  {
+   "name": "rf.model_bytes",
+   "verification": "self_reported",
+   "unit": "bytes"
+  }
+ ],
+ "task": {
+  "type": "classification",
+  "n_classes": 6
+ },
+ "requires": [
+  "numpy",
+  "sklearn"
+ ]
+}

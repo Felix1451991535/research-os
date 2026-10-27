@@ -1,0 +1,102 @@
+// Backend errors with a FIXED message (ADR-221): matched on (code, exact message) and translated; anything else
+// (dynamic messages, unknown codes, a changed backend text) falls back to the raw server message. The backend
+// protocol {code, message, retryable, correlation_id} is unchanged.
+import i18n from "i18next";
+
+/** [code, exact server message, key under `apiErrors`] */
+const FIXED: readonly (readonly [string, string, string])[] = [
+  ["ai_busy", "another AI call is in progress; try again shortly", "aiBusy"],
+  ["ai_outcome_unknown", "the AI call timed out and may have been billed; cost kept as 'unknown' until reconciled", "aiOutcomeUnknown"],
+  ["ai_output_rejected", "no allowed model produced a valid answer", "aiOutputRejected"],
+  ["already_decided", "suggestion was decided concurrently", "alreadyDecided"],
+  ["already_initialized", "admin already exists", "alreadyInitialized"],
+  ["already_superseded", "supersede the newest record instead", "alreadySuperseded"],
+  ["bad_control", "a negative control runs at the trial stage only (never on the test set)", "badControl"],
+  ["bad_decision", "stage, decision and a reason (>= 3 chars) are required", "badDecision"],
+  ["bad_direction", "direction must be references or cited_by", "badDirection"],
+  ["bad_mode", "mode must be copy (default) or move", "badMode"],
+  ["bad_plan", "plan needs 1-6 sub-questions, each with 1-3 queries", "badPlanSubQuestions"],
+  ["bad_protocol", "factors must be 1-4 parameters of the plan's search space", "badProtocolFactors"],
+  ["bad_protocol", "protocol.objective (metric name) is required", "badProtocolObjective"],
+  ["bad_root", "access must be read or write", "badRootAccess"],
+  ["bad_setup_token", "setup token invalid; see <data_dir>/config/setup-token.txt", "badSetupToken"],
+  ["bad_status", "status must be confirmed or rejected", "badStatus"],
+  ["bad_subject", "knowledge_import subject id must be the sha256 of the selected records", "badSubjectImport"],
+  ["bad_subject", "plan subject id must look like '<plan_id>@<revision>'", "badSubjectPlan"],
+  ["bad_suggestion", "op replace|insert_after need an anchor; text must be non-empty", "badSuggestion"],
+  ["bad_term", "every axis term needs at least one non-empty alternative", "badTerm"],
+  ["bad_tiers", "source and 1..50000 entries required", "badTiers"],
+  ["busy", "an apply/undo for this plan is already queued or running", "busy"],
+  ["canary_unavailable", "built-in canary template missing or not reviewed", "canaryUnavailable"],
+  ["concurrent_update", "task changed concurrently; retry", "concurrentUpdate"],
+  ["dataset_changed", "same name+version with different content; bump the version", "datasetChanged"],
+  ["effect_not_approved", "approve this exact plan first", "effectNotApproved"],
+  ["effect_not_approved", "approve this exact plan first (re-auth on remote devices)", "effectNotApprovedRemote"],
+  ["empty_file", "file is empty", "emptyFile"],
+  ["fx_identity", "CNY is the ledger currency", "fxIdentity"],
+  ["idempotency_key_required", "Idempotency-Key header required", "idempotencyKeyMissing"],
+  ["idempotency_key_required", "Idempotency-Key header required for this write", "idempotencyKeyRequired"],
+  ["idempotency_mismatch", "Idempotency-Key reused for a different task", "idempotencyMismatchTask"],
+  ["idempotency_mismatch", "Idempotency-Key reused with a different request body", "idempotencyMismatch"],
+  ["import_not_approved", "approve this exact selection first", "importNotApproved"],
+  ["import_not_authorized", "imports need an approval or a saved-search opt-in", "importNotAuthorized"],
+  ["invalid_comparison", "comparison requires an experiment run", "invalidComparison"],
+  ["invalid_credentials", "invalid username or password", "invalidCredentials"],
+  ["invalid_credentials", "password incorrect", "passwordIncorrect"],
+  ["invalid_pairing_code", "issuing device was revoked", "pairingDeviceRevoked"],
+  ["invalid_pairing_code", "pairing code invalid, used or expired", "invalidPairingCode"],
+  ["invalid_saved_search", "kind=query needs query.text; kind=author needs query.author", "invalidSavedSearch"],
+  ["missing_dependency", "numpy is required for datasets (install the experiments extra)", "missingDependency"],
+  ["no_citation_source", "no installed source supports citation chaining", "noCitationSource"],
+  ["no_cited_sentences", "this answer has no verified, cited sentences to insert", "noCitedSentences"],
+  ["no_runs", "this plan has no runs to bundle", "noRuns"],
+  ["not_comparable", "runs used different datasets or splits", "notComparableData"],
+  ["not_comparable", "runs used different seeds; compare configurations at the same seed", "notComparableSeeds"],
+  ["not_comparable", "the runs' predictions cover different windows or labels", "notComparableWindows"],
+  ["not_eligible", "include at title/abstract stage before full-text screening", "notEligible"],
+  ["not_found", "approval not found", "approvalNotFound"],
+  ["not_found", "device not found", "deviceNotFound"],
+  ["not_found", "task not found", "taskNotFound"],
+  ["not_found", "unknown candidate id in selection", "unknownCandidate"],
+  ["not_found", "user not found", "userNotFound"],
+  ["not_in_review", "candidate is not part of this review", "notInReview"],
+  ["operation_in_progress", "This operation is running; retry the same key.", "operationInProgress"],
+  ["operation_uncertain", "Card field has no saved answer after interruption; inspect the gateway call before starting a new intent.", "operationUncertain"],
+  ["plan_not_approved", "approve both canary plans first", "canaryPlansNotApproved"],
+  ["plan_not_approved", "approve the plan revision before starting a study", "planNotApproved"],
+  ["query_too_short", "type at least 2 characters", "queryTooShort"],
+  ["reauth_required", "re-enter your password to approve this from a remote device", "reauthRequired"],
+  ["revision_conflict", "project was modified elsewhere; reload", "revisionConflict"],
+  ["setup_local_only", "initial setup must be done on the host machine (127.0.0.1)", "setupLocalOnly"],
+  ["subject_changed", "the subject changed since you reviewed it; review again", "subjectChanged"],
+  ["too_many_attempts", "too many failed attempts; wait a few minutes", "tooManyAttempts"],
+  ["unauthenticated", "login required", "unauthenticated"],
+  ["unknown_link", "every link must name an existing record", "unknownLink"],
+  ["version_conflict", "document changed on server; both versions kept, merge required", "versionConflict"],
+  ["monthly_budget_exhausted", "monthly AI budget would be exceeded; paid call rejected", "monthlyBudget"],
+  ["task_budget_exhausted", "per-task AI budget would be exceeded", "taskBudget"],
+  ["daily_budget_exhausted", "today's AI budget would be exceeded; paid call rejected", "dailyBudget"],
+  ["project_budget_exhausted", "per-project AI budget would be exceeded (or the call has no project)", "projectBudget"],
+  ["page_not_found", "no parsed page with that index for this document version", "pageNotFound"],
+  ["quote_not_found", "the quote does not occur on that page of the source", "quoteNotFound"],
+  ["validation_error", "request validation failed", "validationError"],
+  ["internal_error", "internal error; see server log with correlation_id", "internalError"],
+  ["length_required", "Content-Length required", "lengthRequired"],
+  ["bad_content_length", "invalid Content-Length", "badContentLength"],
+];
+
+const INDEX = new Map(FIXED.map(([code, message, key]) => [`${code}\u0000${message}`, key]));
+
+/** Translation key (under `apiErrors`) for a known fixed backend error, or null. */
+export function apiErrorKey(code: string, message: string): string | null {
+  return INDEX.get(`${code}\u0000${message}`) ?? null;
+}
+
+/** Keys the table refers to (the parity test checks each one exists in both locales). */
+export const API_ERROR_KEYS: readonly string[] = [...new Set(FIXED.map((f) => f[2]))];
+
+/** Translated text for a backend error; the raw server message when it is not a known fixed one. */
+export function translateApiError(code: string, message: string): string {
+  const key = apiErrorKey(code, message);
+  return key ? String(i18n.t(`apiErrors.${key}` as never)) : message;
+}

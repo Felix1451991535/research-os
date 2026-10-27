@@ -1,0 +1,58 @@
+[project]
+name = "researchos-plugin-litsearch"
+version = "0.3.0"
+description = "Research OS contracts 1.2 litsearch plugin"
+requires-python = ">=3.11,<3.14"
+dependencies = ["researchos>=0.1", "bibtexparser>=1.4,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.17", "mypy>=2.4", "build", "hatchling"]
+
+[project.entry-points."researchos.plugins"]
+researchos_plugin_litsearch = "researchos_plugin_litsearch:MANIFEST"
+
+[project.entry-points."researchos.datasources"]
+lit_crossref = "researchos_plugin_litsearch.json_sources:CrossrefSource"
+lit_openalex = "researchos_plugin_litsearch.openalex_graph:OpenAlexSource"
+lit_unpaywall = "researchos_plugin_litsearch.unpaywall:UnpaywallResolver"
+lit_semantic = "researchos_plugin_litsearch.json_sources:SemanticScholarSource"
+lit_pubmed = "researchos_plugin_litsearch.xml_sources:PubMedSource"
+lit_arxiv = "researchos_plugin_litsearch.xml_sources:ArxivSource"
+
+[project.entry-points."researchos.importers"]
+lit_selection = "researchos_plugin_litsearch.importers:SelectionImporter"
+lit_ris = "researchos_plugin_litsearch.importers:RisImporter"
+lit_bibtex = "researchos_plugin_litsearch.importers:BibtexImporter"
+
+[tool.uv.sources]
+researchos = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/researchos_plugin_litsearch"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+strict = true
+follow_imports = "silent"
+follow_untyped_imports = true
+native_parser = false
+
+[[tool.mypy.overrides]]
+module = ["bibtexparser.*", "sklearn.*", "jsonschema.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

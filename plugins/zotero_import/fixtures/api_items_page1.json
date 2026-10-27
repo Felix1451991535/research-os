@@ -1,0 +1,48 @@
+[
+  {
+    "key": "ABCD2345",
+    "version": 12,
+    "library": {"type": "user", "id": 1234567, "name": "synthetic"},
+    "meta": {"parsedDate": "2021-03-04", "numChildren": 1},
+    "data": {
+      "key": "ABCD2345",
+      "version": 12,
+      "itemType": "journalArticle",
+      "title": "Heart rate variability in intensive care: a synthetic test record",
+      "creators": [
+        {"creatorType": "author", "firstName": "Wei", "lastName": "Zhang"},
+        {"creatorType": "author", "firstName": "Anna", "lastName": "Müller"},
+        {"creatorType": "editor", "firstName": "Ed", "lastName": "Itor"}
+      ],
+      "abstractNote": "Synthetic abstract.",
+      "publicationTitle": "Journal of Synthetic Cardiology",
+      "date": "2021-03-04",
+      "DOI": "10.5555/SYN.0001",
+      "url": "https://example.org/syn1",
+      "extra": "PMID: 34000001\nPMCID: PMC8000001",
+      "tags": [{"tag": "ECG"}, {"tag": "HRV", "type": 1}],
+      "collections": ["COLL2345"],
+      "rights": ""
+    }
+  },
+  {
+    "key": "EFGH6789",
+    "version": 7,
+    "library": {"type": "user", "id": 1234567, "name": "synthetic"},
+    "meta": {},
+    "data": {
+      "key": "EFGH6789",
+      "version": 7,
+      "itemType": "preprint",
+      "title": "心电图深度学习综述（合成测试条目）",
+      "creators": [{"creatorType": "author", "name": "李明"}],
+      "date": "Spring 2023",
+      "archiveID": "arXiv:2301.01234",
+      "repository": "arXiv",
+      "url": "https://arxiv.org/abs/2301.01234v2",
+      "DOI": "",
+      "tags": [],
+      "collections": []
+    }
+  }
+]

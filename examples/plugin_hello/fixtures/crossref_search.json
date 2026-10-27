@@ -1,0 +1,9 @@
+{"_note": "SYNTHETIC fixture in Crossref response format (hand-written for tests; not real records)",
+ "status": "ok", "message": {"total-results": 2, "items": [
+  {"DOI": "10.5555/HELLO.0001", "title": ["Wearable sensing for activity recognition: a review"], "type": "review-article",
+   "author": [{"given": "Ada", "family": "Example"}, {"family": "Sample"}], "container-title": ["Journal of Examples"],
+   "issued": {"date-parts": [[2021, 5]]},
+   "license": [{"URL": "https://creativecommons.org/licenses/by/4.0/"}],
+   "link": [{"URL": "https://api.crossref.org/pdf/hello-0001.pdf", "content-type": "application/pdf"}]},
+  {"DOI": "10.5555/hello.0002", "title": ["Subject-wise validation in HAR"], "type": "journal-article",
+   "author": [{"given": "Bo", "family": "Test"}], "issued": {"date-parts": [[null]]}}]}}

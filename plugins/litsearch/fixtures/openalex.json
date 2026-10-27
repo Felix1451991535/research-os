@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W-SYNTHETIC",
+      "title": "Synthetic sensor study",
+      "abstract_inverted_index": {
+        "Synthetic": [
+          0
+        ],
+        "study": [
+          1
+        ]
+      }
+    }
+  ],
+  "meta": {
+    "count": 1
+  },
+  "_fixture": "Original SYNTHETIC test data, CC0-1.0; not real papers."
+}

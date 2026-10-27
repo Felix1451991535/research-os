@@ -1,0 +1,33 @@
+{
+  "id": "physio_ecg_baseline",
+  "version": "0.4.0",
+  "entry": "run.py",
+  "description": "CPU ECG/EEG baseline: RR-interval + morphology features, or (features=mne_bandpower, EEG windows) MNE band-pass + Welch band power with artifact checks, or (features=mne_csp, motor-imagery EEG windows) MNE common spatial patterns fit on train only, or (features=neurokit_hrv, continuous MIT-BIH segments) NeuroKit2 R-peak detection validated against reference peaks and HRV features; logistic regression or random forest. Reads only ctx.data('train') and ctx.eval_split(); logs macro-F1, per-class sensitivity/PPV and the confusion matrix.",
+  "params_schema": {
+    "type": "object",
+    "properties": {
+      "model": {"enum": ["logreg", "rf"]},
+      "C": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000},
+      "n_estimators": {"type": "integer", "minimum": 10, "maximum": 1000},
+      "max_depth": {"type": ["integer", "null"], "minimum": 1, "maximum": 64},
+      "class_weight": {"enum": ["balanced", null]},
+      "morph_points": {"type": "integer", "minimum": 4, "maximum": 128},
+      "features": {"enum": ["morphology", "neurokit_hrv", "mne_bandpower", "mne_csp"]},
+      "csp_components": {"type": "integer", "minimum": 1, "maximum": 64},
+      "csp_reg": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+      "l_freq": {"type": "number", "exclusiveMinimum": 0, "maximum": 40},
+      "h_freq": {"type": "number", "minimum": 5, "maximum": 200},
+      "artifact_ptp": {"type": "number", "exclusiveMinimum": 0},
+      "exclude_artifacts_train": {"type": "boolean"},
+      "ecg_clean_method": {"enum": ["neurokit", "pantompkins1985"]},
+      "ecg_peaks_method": {"enum": ["neurokit", "pantompkins1985"]}
+    },
+    "additionalProperties": false
+  },
+  "resource_class": "cpu",
+  "metrics": [
+    {"name": "macro_f1", "verification": "recomputed", "unit": null, "range": [0, 1]}
+  ],
+  "task": {"type": "classification"},
+  "requires": ["numpy", "sklearn", "neurokit2", "mne"]
+}

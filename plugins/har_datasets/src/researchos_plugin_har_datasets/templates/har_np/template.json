@@ -1,0 +1,72 @@
+{
+  "id": "har_np",
+  "version": "0.1.0",
+  "entry": "run.py",
+  "description": "CPU subject-wise HAR baselines on raw windows: model=rf (summary features + RandomForest) or model=cnn (numpy convolution/ReLU/GAP/dense, full-batch GD). Training-only scaling.",
+  "params_schema": {
+    "type": "object",
+    "properties": {
+      "model": {
+        "enum": [
+          "rf",
+          "cnn"
+        ],
+        "default": "rf"
+      },
+      "device": {
+        "enum": [
+          "cpu"
+        ],
+        "default": "cpu"
+      },
+      "n_classes": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 6
+      },
+      "trees": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 500
+      },
+      "epochs": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200
+      },
+      "learning_rate": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1
+      }
+    },
+    "additionalProperties": false
+  },
+  "metrics": [
+    {
+      "name": "accuracy",
+      "verification": "recomputed",
+      "range": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "macro_f1",
+      "verification": "recomputed",
+      "range": [
+        0,
+        1
+      ]
+    }
+  ],
+  "task": {
+    "type": "classification",
+    "n_classes": 6
+  },
+  "requires": [
+    "numpy",
+    "sklearn"
+  ]
+}

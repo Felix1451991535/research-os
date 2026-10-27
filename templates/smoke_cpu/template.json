@@ -1,0 +1,9 @@
+{
+  "id": "smoke_cpu", "version": "1", "entry": "run.py",
+  "description": "CPU self-test: nearest-centroid on seeded synthetic data; exercises SDK, cancel, verification.",
+  "params_schema": {"type": "object", "properties": {"n": {"type": "integer", "minimum": 20, "maximum": 100000},
+    "steps": {"type": "integer", "minimum": 1, "maximum": 1000}, "sleep_s": {"type": "number", "minimum": 0, "maximum": 5}},
+    "additionalProperties": false},
+  "metrics": [{"name": "macro_f1", "split": "synthetic_val", "verification": "recomputed", "range": [0, 1]}],
+  "task": {"type": "classification", "n_classes": 2}
+}

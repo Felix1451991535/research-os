@@ -1,0 +1,77 @@
+{
+ "id": "har_cnn1d",
+ "version": "1",
+ "entry": "run.py",
+ "description": "Lightweight 1D CNN on raw inertial windows (n, 128, 9). window=64 uses the centre crop. CPU by default; honest device label.",
+ "params_schema": {
+  "type": "object",
+  "properties": {
+   "lr": {
+    "type": "number",
+    "exclusiveMinimum": 0,
+    "maximum": 10
+   },
+   "batch": {
+    "type": "integer",
+    "minimum": 4,
+    "maximum": 1024
+   },
+   "dropout": {
+    "type": "number",
+    "minimum": 0,
+    "maximum": 0.9
+   },
+   "window": {
+    "enum": [
+     64,
+     128
+    ]
+   },
+   "epochs": {
+    "type": "integer",
+    "minimum": 1,
+    "maximum": 200
+   }
+  },
+  "additionalProperties": false
+ },
+ "resource_class": "cpu",
+ "metrics": [
+  {
+   "name": "cnn.macro_f1",
+   "verification": "recomputed",
+   "range": [
+    0,
+    1
+   ]
+  },
+  {
+   "name": "cnn.latency_b1_p50",
+   "verification": "self_reported",
+   "unit": "ms"
+  },
+  {
+   "name": "cnn.latency_b1_p95",
+   "verification": "self_reported",
+   "unit": "ms"
+  },
+  {
+   "name": "cnn.model_bytes",
+   "verification": "self_reported",
+   "unit": "bytes"
+  },
+  {
+   "name": "cnn.params",
+   "verification": "self_reported",
+   "unit": "count"
+  }
+ ],
+ "task": {
+  "type": "classification",
+  "n_classes": 6
+ },
+ "requires": [
+  "numpy",
+  "torch"
+ ]
+}

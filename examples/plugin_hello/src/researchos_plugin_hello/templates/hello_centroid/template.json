@@ -1,0 +1,9 @@
+{
+  "id": "hello_centroid", "version": "0.1.0", "entry": "run.py",
+  "description": "Nearest-centroid classifier on window means (reference plugin template).",
+  "params_schema": {"type": "object", "properties": {"shrink": {"type": "number", "minimum": 0, "maximum": 1}},
+                    "additionalProperties": false},
+  "metrics": [{"name": "macro_f1", "verification": "recomputed", "range": [0, 1]}],
+  "task": {"type": "classification", "n_classes": 3},
+  "requires": ["numpy"]
+}

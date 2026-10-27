@@ -1,0 +1,69 @@
+[project]
+name = "researchos-plugin-physio_signals"
+version = "0.1.0"
+description = "Research OS plugin: PhysioNet ECG/EEG dataset providers (MIT-BIH, PTB-XL, CHB-MIT) + ECG baseline template"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+# Only researchos.contracts / researchos.sdk are imported from core.
+dependencies = ["researchos>=0.1", "numpy>=1.26"]
+
+[project.optional-dependencies]
+template = ["scikit-learn>=1.5", "neurokit2==0.2.13", "mne==1.10.2"]
+dev = ["pytest>=8", "ruff>=0.17", "mypy>=2.4", "jsonschema>=4.26", "scikit-learn>=1.5", "neurokit2==0.2.13", "mne==1.10.2"]
+
+[project.entry-points."researchos.plugins"]
+researchos_plugin_physio_signals = "researchos_plugin_physio_signals:MANIFEST"
+
+[project.entry-points."researchos.datasources"]
+physio_mitbih = "researchos_plugin_physio_signals.mitbih:MitBihProvider"
+physio_ptbxl = "researchos_plugin_physio_signals.ptbxl:PtbXlProvider"
+physio_chbmit = "researchos_plugin_physio_signals.chbmit:ChbMitProvider"
+physio_eegmmi = "researchos_plugin_physio_signals.eegmmi:EegMmiProvider"
+physio_synth_eeg = "researchos_plugin_physio_signals.synth_eeg:SynthEegProvider"
+
+[project.entry-points."researchos.templates"]
+physio_ecg_baseline = "researchos_plugin_physio_signals:template_package"
+
+[tool.uv.sources]
+researchos = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/researchos_plugin_physio_signals"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C90", "SIM", "S"]
+ignore = ["S101", "S311"]  # S311: seeded random is for reproducible splits, not cryptography (as in core)
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B", "SIM"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+mypy_path = ["src", "tests"]
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["hrv", "eeg", "cards"]  # template-local modules (run.py is executed from its own directory)
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["sklearn", "sklearn.*", "neurokit2", "neurokit2.*", "mne", "mne.*"]
+follow_untyped_imports = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"

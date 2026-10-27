@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC test fixture (CC0-1.0), shaped like a Zotero RDF export. -->
+<rdf:RDF
+ xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+ xmlns:z="http://www.zotero.org/namespaces/export#"
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:dcterms="http://purl.org/dc/terms/"
+ xmlns:bib="http://purl.org/net/biblio#"
+ xmlns:foaf="http://xmlns.com/foaf/0.1/"
+ xmlns:link="http://purl.org/rss/1.0/modules/link/"
+ xmlns:prism="http://prismstandard.org/namespaces/1.2/basic/">
+    <bib:Article rdf:about="#item_1">
+        <z:itemType>journalArticle</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal><dc:title>Synthetic Journal of Signal Processing</dc:title></bib:Journal>
+        </dcterms:isPartOf>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li><foaf:Person><foaf:surname>Okafor</foaf:surname><foaf:givenName>Ada</foaf:givenName></foaf:Person></rdf:li>
+                <rdf:li><foaf:Person><foaf:surname>Tanaka</foaf:surname><foaf:givenName>Ken</foaf:givenName></foaf:Person></rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dcterms:isReferencedBy rdf:resource="#item_2"/>
+        <link:link rdf:resource="#item_3"/>
+        <dc:subject>EEG</dc:subject>
+        <dc:subject><z:AutomaticTag><rdf:value>Seizure detection</rdf:value></z:AutomaticTag></dc:subject>
+        <dc:title>Seizure detection from scalp EEG: a synthetic RDF test item</dc:title>
+        <dcterms:abstract>Synthetic abstract.</dcterms:abstract>
+        <dc:date>2022-07-15</dc:date>
+        <dc:identifier>DOI 10.5555/SYN.RDF.0001</dc:identifier>
+        <dc:identifier><dcterms:URI><rdf:value>https://example.org/rdf1</rdf:value></dcterms:URI></dc:identifier>
+        <dc:description>PMID: 35000002</dc:description>
+        <dc:rights>CC BY 4.0</dc:rights>
+    </bib:Article>
+    <bib:Memo rdf:about="#item_2">
+        <rdf:value>&lt;p&gt;Reviewer note: &lt;b&gt;check&lt;/b&gt; the patient-level split&lt;/p&gt;</rdf:value>
+    </bib:Memo>
+    <z:Attachment rdf:about="#item_3">
+        <z:itemType>attachment</z:itemType>
+        <dc:title>Full Text PDF</dc:title>
+        <link:type>application/pdf</link:type>
+    </z:Attachment>
+    <bib:Book rdf:about="urn:isbn:9780306406157">
+        <z:itemType>book</z:itemType>
+        <dc:title>脑电信号处理（合成测试）</dc:title>
+        <dc:identifier>ISBN 978-0-306-40615-7</dc:identifier>
+        <dc:date>circa 2018</dc:date>
+    </bib:Book>
+    <bib:BookSection rdf:about="#item_5">
+        <z:itemType>bookSection</z:itemType>
+        <dcterms:isPartOf rdf:resource="urn:isbn:9780306406157"/>
+        <dc:title>A section inside the synthetic book</dc:title>
+        <dc:date>2018/2019</dc:date>
+    </bib:BookSection>
+    <bib:Document rdf:about="#item_6">
+        <z:itemType>webpage</z:itemType>
+        <dc:title></dc:title>
+    </bib:Document>
+    <z:Collection rdf:about="#collection_1">
+        <dc:title>Thesis</dc:title>
+        <dcterms:hasPart rdf:resource="#collection_2"/>
+        <dcterms:hasPart rdf:resource="#item_5"/>
+    </z:Collection>
+    <z:Collection rdf:about="#collection_2">
+        <dc:title>EEG</dc:title>
+        <dcterms:hasPart rdf:resource="#item_1"/>
+    </z:Collection>
+</rdf:RDF>
