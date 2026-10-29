@@ -67,15 +67,17 @@ export function useDecide(id: string) {
 /** One-click export of experiment results (a run) through the same exporters as documents (ADR-165). */
 export function useRunExport(runId: string) {
   return useMutation({
-    mutationFn: (v: { exporter: string; key: string }) =>
-      api.post<ExportOut>(`/exports/${v.exporter}`, { run_id: runId, mode: "final" }, { idempotencyKey: v.key }),
+    mutationFn: (v: { exporter: string; language: string; key: string }) =>
+      api.post<ExportOut>(`/exports/${v.exporter}`, { run_id: runId, mode: "final", options: { language: v.language } },
+        { idempotencyKey: v.key }),
   });
 }
 
 export function useExport(id: string) {
   return useMutation({
-    mutationFn: (v: ExportInput & { key: string }) =>
-      api.post<ExportOut>(`/docs/${id}/export`, { exporter: v.exporter, mode: v.mode }, { idempotencyKey: v.key }),
+    mutationFn: (v: ExportInput & { language: string; key: string }) =>
+      api.post<ExportOut>(`/docs/${id}/export`, { exporter: v.exporter, mode: v.mode, options: { language: v.language } },
+        { idempotencyKey: v.key }),
   });
 }
 

@@ -4,6 +4,7 @@ researchos.__version__); the GitHub owner/repo come from the default `Settings.u
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -12,10 +13,13 @@ from urllib.parse import urlsplit
 
 from researchos import __version__
 from researchos.kernel.config import Settings
-from researchos.services.ops.updater import asset_name
+from researchos.services.ops.update_feed import asset_name
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE_DIR = ROOT / "release"
+# The update-signing private key lives outside the repo (ADR-228); scripts/release/keygen.py creates it.
+SIGNING_KEY = Path(os.environ.get("RESEARCHOS_UPDATE_KEY")
+                   or Path.home() / ".config" / "researchos" / "keys" / "update-release.pem")
 FEED_URL: str = Settings.update_feed_url  # the dataclass default: https://github.com/<o>/<r>/releases/latest/...
 _FEED_PATH = re.compile(r"^/([^/]+)/([^/]+)/releases/latest/download/latest\.json$")
 
@@ -43,8 +47,13 @@ def sha256_line(digest: str, name: str) -> str:
     return f"{digest}  {name}\n"
 
 
+def json_bytes(data: dict[str, str]) -> bytes:
+    """The published form of a JSON file (latest.json is signed over exactly these bytes)."""
+    return (json.dumps(data, indent=1, ensure_ascii=False) + "\n").encode("utf-8")
+
+
 def write_json(data: dict[str, str], path: Path) -> Path:
-    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_bytes(json_bytes(data))
     return path
 
 

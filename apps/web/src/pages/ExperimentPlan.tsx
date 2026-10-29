@@ -51,7 +51,7 @@ function PlanActions({ plan, fresh }: { plan: PlanRevision; fresh: boolean }) {
   const busy = action.isPending; const ready = [fresh, tasks.isSuccess, !tasks.isFetching, !busy].every(Boolean);
   return <div className="grid gap-4">
     <h2 className="text-title">{t("plan.heading", { id: plan.plan_id, revision: plan.revision })}</h2>
-    <p>{t("plan.hash", { hash: plan.content_hash })}</p><p>{approved ? t("plan.approvedBy", { revision: plan.approved_by_revision }) : t("plan.approvalRequired")}</p>
+    <p className="wrap-anywhere">{t("plan.hash", { hash: plan.content_hash })}</p><p>{approved ? t("plan.approvedBy", { revision: plan.approved_by_revision }) : t("plan.approvalRequired")}</p>
     <JsonDetails value={plan.content} />
     <Button size="touch" disabled={approved || !fresh || busy} onClick={() => setConfirmation("plan")}>{t("plan.approve")}</Button>
     <h2 className="text-title">{t("plan.runParams")}</h2>

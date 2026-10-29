@@ -4,6 +4,7 @@ provenance. Originals go through the normal content-addressed import path (parsi
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
 from ...contracts.datasources import BibRecord
 from ...kernel.db import jdump, new_id, row, tx, utcnow
@@ -102,8 +103,11 @@ class DbKnowledgeWriter:
         return str(wid), created
 
     def attach_original(
-        self, work_id: str, data: bytes, filename: str, *, license: str | None, idempotency_key: str
+        self, work_id: str, data: bytes, filename: str, *, license: str | None, idempotency_key: str,
+        guard: Callable[[], None] | None = None,
     ) -> str:
+        """`guard` (host callers only, not in the plugin contract) runs first inside the relink transaction; if it
+        raises, nothing is relinked (identify_title fences stale confirms with it, Review #103)."""
         scope = f"plugin.{self.plugin}.original"
         prior = self._replay(scope, idempotency_key)
         if prior:
@@ -120,6 +124,8 @@ class DbKnowledgeWriter:
         )
         vid = str(res["version"]["version_id"])
         with tx(self.conn):
+            if guard is not None:
+                guard()
             old = row(self.conn.execute("SELECT work_id FROM document_versions WHERE version_id=?", (vid,)))
             if old and old["work_id"] != work_id:  # bytes belong to this Work (importer knows the record)
                 self.conn.execute(

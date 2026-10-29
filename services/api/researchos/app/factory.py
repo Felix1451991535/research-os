@@ -17,6 +17,7 @@ from ..api.routers import (
     canary,
     core,
     deep_research,
+    diagnostics,
     docs,
     effects,
     experiments,
@@ -118,7 +119,7 @@ def create_app(settings: Settings | None = None, svc: Services | None = None) ->
     for r in (core.router, auth.router, projects.router, tasks.router, knowledge.router, research.router,
               gateway_admin.router, experiments.router, canary.router, extensions.router, literature.router,
               reviews.router, library.router, effects.router,
-              deep_research.router, docs.router, update.router):
+              deep_research.router, docs.router, update.router, diagnostics.router):
         app.include_router(r)
     _plugin_routers(app)
     _static_routes(app, svc.settings)

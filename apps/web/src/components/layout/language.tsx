@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/input";
 import { Tip } from "@/components/ui/misc";
 
-function useLanguage(): Language {
+export function useLanguage(): Language {
   const { i18n } = useTranslation();
   return isLanguage(i18n.language) ? i18n.language : "en";
 }

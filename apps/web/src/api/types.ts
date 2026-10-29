@@ -97,12 +97,12 @@ export interface StudyAdvice {
     plan?: { skipped: { factor: string; reason: string }[] }; data?: string } | null;
 }
 
-// One-click update (ADR-223). The /update routes return plain dicts, so this mirrors services/ops/updater.py.
+// One-click update (ADR-223/228). The /update routes return plain dicts, so this mirrors services/ops/updater.py.
 export type UpdateState = "idle" | "checking" | "up_to_date" | "available" | "downloading" | "ready" | "installing" | "error";
 export interface UpdateStatus {
   current_version: string;
   state: UpdateState;
-  latest: { version: string; asset: string; sha256: string; url: string; notes: string } | null;
+  latest: { version: string; asset: string; sha256: string; url: string; notes: string; notes_zh: string } | null;
   progress: { received: number; total: number } | null;
   error: { code: string; message: string } | null;
   mirror_prefix: string;
@@ -110,4 +110,6 @@ export interface UpdateStatus {
   can_install: boolean;
   auto_check: false;
   installer: string | null;
+  /** notes of the update that is now running, until dismissed once */
+  whats_new: { version: string; notes: string; notes_zh: string } | null;
 }

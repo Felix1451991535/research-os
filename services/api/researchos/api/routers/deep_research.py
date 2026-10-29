@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
@@ -28,6 +28,7 @@ class DeepIn(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     use_model_screening: bool = False
     criteria: dict[str, Any] | None = None
+    language: Literal["en", "zh-CN"] = "en"  # fixed text of the report doc (ADR-243); data stays as written
 
 
 class ContradictionIn(BaseModel):
@@ -49,7 +50,7 @@ def create(data: DeepIn, request: Request, p: Principal = Depends(principal),
     svc = services(request)
     r = deep.create(conn, svc, project_id=data.project_id, question=data.question, sources=data.sources,
                     actor=p.actor, sub_questions=data.sub_questions, rounds=data.rounds, page_size=data.page_size,
-                    use_model_screening=data.use_model_screening, criteria=data.criteria)
+                    use_model_screening=data.use_model_screening, criteria=data.criteria, language=data.language)
     deep_tasks.enqueue(conn, svc.kinds, r["id"], "created", p.actor)
     return _view(conn, r)
 

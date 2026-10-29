@@ -13,6 +13,7 @@ describe("backend error messages in the UI language", () => {
     expect(describeError(err("invalid_credentials", "invalid username or password", "c1"))).toBe("用户名或密码错误(参考号 c1)");
     expect(describeError(err("invalid_credentials", "password incorrect"))).toBe("密码错误");
     expect(describeError(new OfflineError())).toContain("无法连接");
+    expect(describeError(err("not_found", "deep research run not found"))).toBe("未找到该深度调研运行");
   });
 
   it("falls back to the raw server message for dynamic or unknown messages", async () => {

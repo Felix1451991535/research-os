@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from typing import Any
 
 from ...contracts.errors import ApiError
 from ...contracts.gateway import TaskType
 from ...kernel.db import jdump, new_id, row, rows, tx, utcnow
 from ...kernel.events import emit
+from ...sdk.texts import DEFAULT_LANGUAGE, export_language
 from ..gateway.attempt import GatewayError
 from ..gateway.router import Signals
 from ..knowledge import imports
@@ -31,7 +33,12 @@ DONE_PARSE = ("parsed", "partial", "failed", "unsupported", "needs_ocr")
 
 def create(conn: sqlite3.Connection, svc: Any, *, project_id: str, question: str, sources: list[str], actor: str,
            sub_questions: list[dict[str, Any]] | None = None, rounds: int = 2, page_size: int = 10,
-           use_model_screening: bool = False, criteria: dict[str, Any] | None = None) -> dict[str, Any]:
+           use_model_screening: bool = False, criteria: dict[str, Any] | None = None,
+           language: str = DEFAULT_LANGUAGE) -> dict[str, Any]:
+    try:
+        export_language({"language": language})
+    except ValueError as e:
+        raise ApiError(422, "bad_language", str(e)) from e
     unknown = [s for s in sources if s not in svc.extensions.sources]
     if not sources or unknown:
         raise ApiError(422, "unknown_source", f"unknown or no sources {unknown}")
@@ -42,7 +49,7 @@ def create(conn: sqlite3.Connection, svc: Any, *, project_id: str, question: str
                            project_id=project_id, criteria=criteria or {"include": [question], "exclude": []})
     rid, now = new_id("dr"), utcnow()
     settings = {"sources": sources, "rounds": max(1, min(2, rounds)), "page_size": page_size,
-                "use_model_screening": use_model_screening}
+                "use_model_screening": use_model_screening, "language": language}  # report language (ADR-243)
     with tx(conn):
         conn.execute("INSERT INTO deep_research(id,project_id,question,settings,plan,review_id,stage,data,created_by,"
                      "created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
@@ -64,7 +71,7 @@ def _validate_plan(plan: Any) -> list[dict[str, Any]]:
     return list(sq)  # type: ignore[arg-type]
 
 
-def _planning(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str) -> str:
+def _planning(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str, token: str) -> str:
     def validate(t: str) -> tuple[Signals, Any]:
         try:
             plan = json.loads(t)
@@ -77,9 +84,9 @@ def _planning(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str)
         g = svc.gateway.call(conn, task_type=TaskType.ROUTINE_TEXT, prompt=DR_PLAN,
                              variables={"question": r["question"]}, validate=validate, project_id=r["project_id"])
     except GatewayError as e:
-        store.save(conn, r["id"], actor, data={**r["data"], "planning_error": e.message})
+        store.save(conn, r["id"], actor, token=token, data={**r["data"], "planning_error": e.message})
         return "planning"  # owner can supply sub-questions instead (create with sub_questions)
-    store.save(conn, r["id"], actor, plan=g.payload, stage="awaiting_plan_approval",
+    store.move(conn, r["id"], actor, "planning", "awaiting_plan_approval", token=token, plan=g.payload,
                data={**r["data"], "plan_calls": g.call_ids})
     return "awaiting_plan_approval"
 
@@ -102,17 +109,18 @@ def _suggest(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], ids: list[st
     return out
 
 
-def _searching(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str) -> str:
+def _searching(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str, token: str) -> str:
     runs, ids = [], []
     for sq in r["plan"]["sub_questions"]:
         for q in sq["queries"]:
+            store.renew(conn, r["id"], token)
             res = discovery.search(conn, _ctx(svc, r, actor), q, r["settings"]["sources"],
                                    page_size=r["settings"]["page_size"])
             runs.append(res["id"])
             screening.add_items(conn, r["review_id"], res["candidate_ids"], res["id"])
             ids += [c for c in res["candidate_ids"] if c not in ids]
     sug = _suggest(conn, svc, r, ids, actor)
-    store.save(conn, r["id"], actor, stage="awaiting_screening",
+    store.move(conn, r["id"], actor, "searching", "awaiting_screening", token=token,
                data={**r["data"], "round": 1, "runs": runs, "suggestions_round1": _brief(sug)})
     return "awaiting_screening"
 
@@ -129,12 +137,14 @@ def _decided(conn: sqlite3.Connection, r: dict[str, Any]) -> tuple[bool, list[st
     return not pending, included
 
 
-def _chain_round(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], included: list[str], actor: str) -> list[str]:
+def _chain_round(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], included: list[str], actor: str,
+                 token: str) -> list[str]:
     new: list[str] = []
     capable = [n for n in r["settings"]["sources"] if hasattr(svc.extensions.sources[n], "cited_by")]
     if not capable:
         return new
     for cid in included[:10]:
+        store.renew(conn, r["id"], token)
         rec = candidates.record_of(candidates.get(conn, cid))
         for direction in ("references", "cited_by"):
             res = discovery.chain(conn, _ctx(svc, r, actor), rec, direction, capable, r["settings"]["page_size"])
@@ -143,85 +153,116 @@ def _chain_round(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], included
     return new
 
 
-def _screening(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str) -> str:
+def _screening(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str, token: str) -> str:
     done, included = _decided(conn, r)
     if not done:
         return "awaiting_screening"
     if r["data"].get("round", 1) < r["settings"]["rounds"]:
-        new = _chain_round(conn, svc, r, included, actor)
+        new = _chain_round(conn, svc, r, included, actor, token)
         sug = _suggest(conn, svc, r, new, actor)
-        r = store.save(conn, r["id"], actor, data={**r["data"], "round": 2, "round2_new": len(new),
+        r = store.save(conn, r["id"], actor, token=token, data={**r["data"], "round": 2, "round2_new": len(new),
                                                     "suggestions_round2": _brief(sug)})
         if new:
             return "awaiting_screening"
         _, included = _decided(conn, r)
     if not included:
-        store.save(conn, r["id"], actor, stage="stopped", data={**r["data"], "stop_reason": "nothing included"})
+        store.move(conn, r["id"], actor, "awaiting_screening", "stopped", token=token,
+                   data={**r["data"], "stop_reason": "nothing included"})
         return "stopped"
     recs = [candidates.record_of(c) for c in candidates.many(conn, included)]
-    store.save(conn, r["id"], actor, stage="awaiting_import_approval",
+    store.move(conn, r["id"], actor, "awaiting_screening", "awaiting_import_approval", token=token,
                data={**r["data"], "selection": included, "selection_hash": imports.records_hash(recs)})
     return "awaiting_import_approval"
 
 
-def _importing(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str) -> str:
+def _importing(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str, token: str) -> str:
+    """Consume the import approval and record that in the run in one transaction, then import the selection one
+    candidate at a time, renewing the lease and saving progress after each (Review #98): an advance that takes over
+    an expired lease finishes an already approved import from where it stopped, without a second approval."""
     sel = r["data"]["selection"]
-    try:
-        h = imports.consume_approval(conn, [candidates.record_of(c) for c in candidates.many(conn, sel)], actor)
-    except ApiError:
-        return "awaiting_import_approval"
+    auth = r["data"].get("import_authorized")
+    if auth is None:
+        recs = [candidates.record_of(c) for c in candidates.many(conn, sel)]
+        try:
+            with tx(conn):
+                auth = f"approval:{imports.consume_approval(conn, recs, actor)}"
+                r = store.save(conn, r["id"], actor, token=token, join=True,
+                               data={**r["data"], "import_authorized": auth})
+        except ApiError:
+            return "awaiting_import_approval"
     writer = DbKnowledgeWriter(conn, svc.blobs, svc.kinds, plugin="core.deep_research", actor=actor,
                                project_id=r["project_id"], max_bytes=svc.settings.max_upload_mb * 1024 * 1024)
-    res = importing.import_candidates(conn, _ctx(svc, r, actor), writer, sel, authorized_by=f"approval:{h}",
-                                      with_pdf=oa.lit_settings(conn)["pdf_download"])
+    with_pdf = oa.lit_settings(conn)["pdf_download"]
+    res: list[dict[str, Any]] = list(r["data"].get("imported") or [])  # progress of an advance that lost its lease
+    done = {x["candidate_id"] for x in res}
+    for cid in sel:
+        if cid in done:
+            continue
+        store.renew(conn, r["id"], token)
+        res += importing.import_candidates(conn, _ctx(svc, r, actor), writer, [cid], authorized_by=auth,
+                                           with_pdf=with_pdf)
+        r = store.save(conn, r["id"], actor, token=token, data={**r["data"], "imported": res})
     works = sorted({x["work_id"] for x in res if x.get("work_id")})
-    store.save(conn, r["id"], actor, stage="reading", data={**r["data"], "imported": res, "works": works})
+    store.move(conn, r["id"], actor, "awaiting_import_approval", "reading", token=token,
+               data={**r["data"], "imported": res, "works": works})
     return "reading"
 
 
-def _reading(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str) -> str:
+def _reading(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str, token: str) -> str:
     works = r["data"]["works"]
     if not works:
-        return _go_synth(conn, r, actor)
+        return _go_synth(conn, r, actor, token)
     marks = ",".join("?" * len(works))
     vs = rows(conn.execute(f"SELECT work_id, parse_state FROM document_versions WHERE work_id IN ({marks})", works))
     if any(v["parse_state"] not in DONE_PARSE for v in vs):
         return "reading"
-    return _go_synth(conn, r, actor)
+    return _go_synth(conn, r, actor, token)
 
 
-def _go_synth(conn: sqlite3.Connection, r: dict[str, Any], actor: str) -> str:
-    store.save(conn, r["id"], actor, stage="synthesizing")
+def _go_synth(conn: sqlite3.Connection, r: dict[str, Any], actor: str, token: str) -> str:
+    store.move(conn, r["id"], actor, "reading", "synthesizing", token=token)
     return "synthesizing"
 
 
-def _synthesizing(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str) -> str:
+def _synthesizing(conn: sqlite3.Connection, svc: Any, r: dict[str, Any], actor: str, token: str) -> str:
     answers, claim_ids = [], []
     for i, sq in enumerate(r["plan"]["sub_questions"]):
+        store.renew(conn, r["id"], token)
         a = qa.answer(conn, svc.gateway, qa.QAContext(sq["q"], r["project_id"], actor, None))
         answers.append({"sub_question": sq["q"], "answer_id": a["id"], "status": a["status"]})
         claim_ids += claims.from_answer(conn, a, project_id=r["project_id"], actor=actor,
                                         origin={"research_id": r["id"], "sub_question": i})
     flags = claims.flag_contradictions(conn, svc.gateway, claim_ids, project_id=r["project_id"], actor=actor)
     data = {**r["data"], "answers": answers, "claims": claim_ids, "contradictions": flags}
-    r = store.save(conn, r["id"], actor, data=data)
+    r = store.save(conn, r["id"], actor, token=token, data=data)
     doc = deep_report.write(conn, svc, r, actor)
-    store.save(conn, r["id"], actor, stage="completed", data={**data, "report_doc": doc["id"]})
+    store.move(conn, r["id"], actor, "synthesizing", "completed", token=token, data={**data, "report_doc": doc["id"]})
     return "completed"
 
 
-STAGES = {"planning": _planning, "searching": _searching, "awaiting_screening": _screening,
+Stage = Callable[[sqlite3.Connection, Any, dict[str, Any], str, str], str]
+STAGES: dict[str, Stage] = {"planning": _planning, "searching": _searching, "awaiting_screening": _screening,
           "awaiting_import_approval": _importing, "reading": _reading, "synthesizing": _synthesizing}
 
 
 def advance(conn: sqlite3.Connection, svc: Any, rid: str, actor: str) -> str:
-    r = store.get(conn, rid)
-    if r["stage"] == "awaiting_plan_approval":
-        if not _approved_plan(conn, r):
-            return "awaiting_plan_approval"
-        r = store.save(conn, rid, actor, stage="searching")
-    fn = STAGES.get(r["stage"])
-    return fn(conn, svc, r, actor) if fn else str(r["stage"])
+    """Run the current stage once. Only one advance per run at a time (claim); a concurrent one returns the stage
+    it found without doing anything, and a stage moved under us ends this advance without a second move."""
+    token = store.claim(conn, rid)
+    if token is None:
+        return str(store.get(conn, rid)["stage"])
+    try:
+        r = store.get(conn, rid)
+        if r["stage"] == "awaiting_plan_approval":
+            if not _approved_plan(conn, r):
+                return "awaiting_plan_approval"
+            r = store.move(conn, rid, actor, "awaiting_plan_approval", "searching", token=token)
+        fn = STAGES.get(r["stage"])
+        return fn(conn, svc, r, actor, token) if fn else str(r["stage"])
+    except store.StageConflict:  # incl. LeaseLost: a replacement advance owns the run now
+        return str(store.get(conn, rid)["stage"])
+    finally:
+        store.release(conn, rid, token)
 
 
 def accept_suggestions(conn: sqlite3.Connection, rid: str, actor: str) -> int:

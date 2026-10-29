@@ -15,6 +15,7 @@ import { Tip } from "@/components/ui/misc";
 import { LanguageToggle } from "./language";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { useTheme } from "./theme";
+import { WhatsNew } from "./WhatsNew";
 
 const NAV: { to: string; label: ParseKeys; icon: ReactNode; key: string }[] = [
   { to: "/projects", label: "nav.projects", icon: <FolderKanban />, key: "p" },
@@ -63,8 +64,9 @@ function ThemeToggle() {
   );
 }
 
+// md..lg (iPad portrait): an icon rail, labels for screen readers and as a hover title; lg and up: the full sidebar.
 const linkCls = ({ isActive }: { isActive: boolean }) =>
-  cn("flex min-h-11 items-center gap-3 rounded-md px-3 py-2.5 text-body-sm font-medium transition-colors [&_svg]:size-[18px]",
+  cn("flex min-h-11 items-center justify-center gap-3 rounded-md px-3 py-2.5 lg:justify-start text-body-sm font-medium transition-colors [&_svg]:size-[18px]",
     isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground");
 
 export function AppShell() {
@@ -73,20 +75,21 @@ export function AppShell() {
   const [help, setHelp] = useState(false);
   useGlobalShortcuts(useCallback((to: string) => navigate(to), [navigate]), useCallback(() => setHelp(true), []));
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[13.5rem_1fr]">
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-1 border-r bg-card px-3 py-4 md:flex">
-        <div className="mb-4 flex items-center gap-2 px-2">
-          <div className="grid size-8 place-items-center rounded-lg bg-primary text-body-sm font-bold text-primary-foreground">R</div>
-          <div className="text-title font-semibold">Research OS</div>
+    <div className="min-h-dvh md:grid md:grid-cols-[4.5rem_1fr] lg:grid-cols-[13.5rem_1fr]">
+      <aside className="sticky top-0 hidden h-dvh flex-col gap-1 border-r bg-card px-2 py-4 md:flex lg:px-3">
+        <div className="mb-4 flex items-center justify-center gap-2 px-2 lg:justify-start">
+          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-body-sm font-bold text-primary-foreground">R</div>
+          <div className="hidden text-title font-semibold lg:block">Research OS</div>
         </div>
         <nav className="grid gap-0.5" aria-label={t("nav.main")}>
-          {NAV.map((n) => <NavLink key={n.to} to={n.to} className={linkCls}>{n.icon}{t(n.label)}</NavLink>)}
+          {NAV.map((n) => <NavLink key={n.to} to={n.to} className={linkCls} title={t(n.label)}>
+            {n.icon}<span className="sr-only lg:not-sr-only">{t(n.label)}</span></NavLink>)}
         </nav>
-        <div className="mt-auto px-2 text-caption text-muted-foreground">{t("nav.shortcutHintBefore")}<span className="font-mono">?</span>{t("nav.shortcutHintAfter")}</div>
+        <div className="mt-auto hidden px-2 text-caption text-muted-foreground lg:block">{t("nav.shortcutHintBefore")}<span className="font-mono">?</span>{t("nav.shortcutHintAfter")}</div>
       </aside>
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b bg-background/85 px-4 backdrop-blur md:px-8">
-          <div className="mr-auto text-title font-semibold md:hidden">Research OS</div>
+          <div className="mr-auto text-title font-semibold lg:hidden">Research OS</div>
           <Connection />
           <LanguageToggle />
           <ThemeToggle />
@@ -106,13 +109,15 @@ export function AppShell() {
         ))}
       </nav>
       <ShortcutHelp open={help} onOpenChange={setHelp} />
+      <WhatsNew />
     </div>
   );
 }
 
+/** Page title row; its bottom margin is dropped when a grid parent already spaces it (no doubled gap). */
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3 [.grid>&]:mb-0">
       <div className="grid gap-1">
         <h1 className="text-heading font-semibold tracking-tight">{title}</h1>
         {description ? <p className="text-body-sm text-muted-foreground">{description}</p> : null}

@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { codeLabel } from "@/i18n/taskStages";
 import { describeError } from "@/api/client";
 import { useAnswers, useAsk, type Answer } from "@/api/knowledge";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ function AnswerCard({ a }: { a: Answer }) {
             <a key={l} className="text-caption text-primary" title={byLabel[l].text}
               href={`/api/v1/documents/${byLabel[l].version_id}/file#page=${byLabel[l].page_index + 1}`} target="_blank" rel="noreferrer">
               {t("research.pdfPage", { title: byLabel[l].title, page: byLabel[l].page_index + 1 })}</a>) : null)}
-          <span className="ml-1 text-caption text-muted-foreground">({s.kind})</span></p>
+          <span className="ml-1 text-caption text-muted-foreground">({codeLabel("sentenceKinds", s.kind)})</span></p>
       ))}
       {a.dropped.length ? <details className="text-body-sm text-muted-foreground"><summary>{t("research.removed", { count: a.dropped.length })}</summary>
         <ul className="list-disc pl-5">{a.dropped.map((d, i) => <li key={i}>{d.text} — {d.reason}</li>)}</ul></details> : null}

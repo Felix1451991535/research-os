@@ -7,8 +7,10 @@ from collections.abc import Mapping
 from typing import Any
 
 from researchos.contracts.exporters import ReportSnapshot
+from researchos.sdk.texts import export_language
 
 from .resolve import Resolved, reference_groups, references
+from .texts import TEXTS
 
 ESCAPES = {
     "\\": r"\textbackslash{}",
@@ -53,6 +55,7 @@ def bibtex(result: Resolved) -> str:
 
 
 def render(snapshot: ReportSnapshot, result: Resolved, template: str, options: Mapping[str, Any]) -> str:
+    T = TEXTS.lang(export_language(options))
     style = (
         r"\documentclass[10pt,twocolumn]{article}" if template == "short_paper" else r"\documentclass[11pt]{article}"
     )
@@ -89,9 +92,9 @@ def render(snapshot: ReportSnapshot, result: Resolved, template: str, options: M
         else:
             lines.append(value + "\n")
         if block["claim_id"]:
-            lines.append(r"\par\textit{Claim: " + escape(str(block["claim_id"])) + "}")
+            lines.append(r"\par\textit{" + escape(T("claim", id=block["claim_id"])) + "}")
         if block["caption"]:
             lines.append(r"\par " + escape(str(block["caption"])))
-    lines += [r"\section*{References}"] + [escape(ref) + "\n" for ref in references(result)]
+    lines += [r"\section*{" + escape(T("references")) + "}"] + [escape(ref) + "\n" for ref in references(result)]
     lines.append(r"\end{document}")
     return "\n".join(lines) + "\n"

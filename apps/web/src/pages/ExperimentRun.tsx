@@ -1,13 +1,14 @@
 import { PairedRuns } from "@/components/PairedRuns";
 import { RunComparison } from "@/components/RunComparison";
 import { stateLabel } from "@/components/StatusBadge";
+import { useState } from "react";
 import { useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useExperimentRun, useExperimentTask, useRunAttempts } from "@/api/queries";
 import { PageHeader } from "@/components/layout/AppShell";
 import { EmptyState, QueryView } from "@/components/layout/state";
 import { JsonDetails } from "@/components/ExecutionDetails";
-import { ExportResult } from "@/components/ExportResult";
+import { ExportLanguageSelect, ExportResult, type ExportLanguage } from "@/components/ExportResult";
 import { Button } from "@/components/ui/button";
 import { useRunExport } from "@/api/writing";
 import { describeError } from "@/api/client";
@@ -43,9 +44,13 @@ function RunDetails({ id }: { id: string }) {
 function RunSlides({ runId }: { runId: string }) {
   const { t } = useTranslation();
   const exp = useRunExport(runId);
+  const [language, setLanguage] = useState<ExportLanguage>("en");
   return <div className="grid gap-2">
-    <Button variant="outline" className="justify-self-start" loading={exp.isPending}
-      onClick={() => exp.mutate({ exporter: "report_slides", key: newKey() })}>{t("run.exportSlides")}</Button>
+    <div className="flex flex-wrap items-center gap-3">
+      <Button variant="outline" loading={exp.isPending}
+        onClick={() => exp.mutate({ exporter: "report_slides", language, key: newKey() })}>{t("run.exportSlides")}</Button>
+      <ExportLanguageSelect id="run-export-language" value={language} onChange={setLanguage} />
+    </div>
     {exp.error && <p role="alert">{describeError(exp.error)}</p>}
     {exp.data && <ExportResult label={`report_slides · ${t("doc.modeFinal")}`} result={exp.data} />}
   </div>;

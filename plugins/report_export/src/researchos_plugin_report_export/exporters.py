@@ -22,9 +22,11 @@ from researchos.contracts.exporters import (
     ExportResult,
     ReportSnapshot,
 )
+from researchos.sdk.texts import LANGUAGE_OPTION, export_language
 
 from .latex import bibtex, render
 from .resolve import Resolved, clean, references, resolve, safe_output
+from .texts import TEXTS
 
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 OPTIONS: dict[str, Any] = {
@@ -36,6 +38,7 @@ OPTIONS: dict[str, Any] = {
         "font_size": {"type": "number", "minimum": 8, "maximum": 24, "default": 11},
         "pdf": {"type": "boolean", "default": False},
         "margin_mm": {"type": "number", "minimum": 10, "maximum": 50, "default": 25},
+        **LANGUAGE_OPTION,
     },
     "additionalProperties": False,
 }
@@ -64,6 +67,7 @@ def provenance(snapshot: ReportSnapshot, result: Resolved, ctx: ExportContext) -
 
 
 def docx_bytes(snapshot: ReportSnapshot, result: Resolved, options: Mapping[str, Any], template: str) -> bytes:
+    T = TEXTS.lang(export_language(options))
     doc = Document()
     configure_docx(doc, options, template)
     doc.add_heading(clean(snapshot.title), 0)
@@ -85,10 +89,10 @@ def docx_bytes(snapshot: ReportSnapshot, result: Resolved, options: Mapping[str,
         else:
             doc.add_paragraph(value, style="List Bullet" if kind == "list" else None)
         if block["claim_id"]:
-            doc.add_paragraph("Claim: " + clean(str(block["claim_id"])))
+            doc.add_paragraph(T("claim", id=clean(str(block["claim_id"]))))
         if block["caption"]:
             doc.add_paragraph(clean(str(block["caption"])), style="Caption")
-    doc.add_heading("References", 1)
+    doc.add_heading(T("references"), 1)
     for reference in references(result):
         doc.add_paragraph(clean(reference))
     output = io.BytesIO()

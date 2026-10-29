@@ -26,13 +26,15 @@ from researchos.contracts.exporters import (
     ExportResult,
     ReportSnapshot,
 )
+from researchos.sdk.texts import LANGUAGE_OPTION, Bound, export_language
 
 from .exporters import provenance, validate_options
 from .resolve import Resolved, clean, references, resolve, safe_output, slide_sections
+from .texts import TEXTS
 
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 RGB = cast(Callable[[int, int, int], RGBColor], RGBColor)
-SLIDE_OPTIONS: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": False}
+SLIDE_OPTIONS: dict[str, Any] = {"type": "object", "properties": dict(LANGUAGE_OPTION), "additionalProperties": False}
 
 
 # Line breaking by glyph advance (em) instead of character count (review #14): printable-ASCII advances of
@@ -263,7 +265,7 @@ def figure_slide(deck: PptxPresentation, title: str, image: bytes, caption: str)
     return lines[2:]
 
 
-def _block_group(block: dict[str, Any]) -> list[str]:
+def _block_group(block: dict[str, Any], T: Bound) -> list[str]:
     lines: list[str] = []
     if block["kind"] == "figure" and not block.get("image"):
         lines.append("[unresolved figure]")
@@ -273,13 +275,15 @@ def _block_group(block: dict[str, Any]) -> list[str]:
     else:
         lines += slide_lines(str(block["text"]))
     if block["claim_id"]:
-        lines += slide_lines("Claim: " + str(block["claim_id"]))
+        lines += slide_lines(T("claim", id=block["claim_id"]))
     if not block.get("image"):  # a figure's caption sits under its picture
         lines += slide_lines(str(block["caption"])) if block["caption"] else []
     return [x for x in lines if x.strip()]
 
 
-def slides_section(deck: PptxPresentation, title: str, blocks: list[dict[str, Any]], result: Resolved) -> None:
+def slides_section(
+    deck: PptxPresentation, title: str, blocks: list[dict[str, Any]], result: Resolved, T: Bound
+) -> None:
     initial_slides = len(deck.slides)
     groups: list[list[str]] = []
     for block in blocks:
@@ -290,23 +294,19 @@ def slides_section(deck: PptxPresentation, title: str, blocks: list[dict[str, An
             groups.append(figure_slide(deck, title, result.images[block["image"]], str(block["caption"] or "")))
         elif block["kind"] == "table" and block["rows"]:
             table_slides(deck, title, [list(r) for r in block["rows"]], result)
-        groups.append(_block_group(block))
+        groups.append(_block_group(block, T))
     slides_text_pages(deck, title, groups, result)
     if len(deck.slides) == initial_slides:  # an empty section gets no slide; the diagnostics still say so
         result.diagnostics.append(Diagnostic("info", "empty_section", f"{title}: no content", title))
 
 
-KIND_LABEL = {"report": "Report", "answer": "Cited answer", "manuscript": "Manuscript", "paper_card": "Paper card"}
+KINDS = ("report", "answer", "manuscript", "paper_card")
 
 
-def title_slide(deck: PptxPresentation, snapshot: ReportSnapshot, result: Resolved) -> None:
-    lines = slide_lines(snapshot.title) or ["Untitled"]
-    lines += [
-        "",
-        datetime.now(UTC).strftime("%d %B %Y"),
-        "Numbers and citations link to verified records (provenance.json)",
-    ]
-    slides_text_pages(deck, KIND_LABEL.get(snapshot.kind, "Report"), [lines], result)
+def title_slide(deck: PptxPresentation, snapshot: ReportSnapshot, result: Resolved, T: Bound) -> None:
+    lines = slide_lines(snapshot.title) or [T("untitled")]
+    lines += ["", datetime.now(UTC).strftime(T("date_format")), T("provenance_note")]
+    slides_text_pages(deck, T(f"kind_{snapshot.kind if snapshot.kind in KINDS else 'report'}"), [lines], result)
 
 
 def number_slides(deck: PptxPresentation, short_title: str) -> None:
@@ -334,15 +334,16 @@ class SlidesExporter:
 
     def export(self, snapshot: ReportSnapshot, ctx: ExportContext, options: Mapping[str, Any]) -> ExportResult:
         validate_options(options, SLIDE_OPTIONS)
+        T = TEXTS.lang(export_language(options))
         result = resolve(snapshot, ctx)
         if any(d.severity == "error" for d in result.diagnostics):
             return ExportResult((), tuple(result.diagnostics))
         deck = Presentation()
         deck.slide_width, deck.slide_height = SlideInches(13.333), SlideInches(7.5)
-        title_slide(deck, snapshot, result)
-        for title, blocks in slide_sections(result).items():
-            slides_section(deck, title, blocks, result)
-        slides_text_pages(deck, "References", [slide_lines(r) for r in references(result)], result)
+        title_slide(deck, snapshot, result, T)
+        for section, blocks in slide_sections(result).items():
+            slides_section(deck, T(f"section_{section.lower()}"), blocks, result, T)
+        slides_text_pages(deck, T("references"), [slide_lines(r) for r in references(result)], result)
         number_slides(deck, snapshot.title)
         output = io.BytesIO()
         deck.save(output)

@@ -14,16 +14,17 @@ from datetime import datetime
 from typing import Any
 
 from ...kernel.db import jload, rows
+from ...sdk.texts import DEFAULT_LANGUAGE, Bound
 from ..execution import datasets
 from ..execution.templates import TemplateRegistry
 from ..gateway.gateway import Gateway
 from . import cards
 
-QUESTIONS: tuple[tuple[str, str, str], ...] = (
-    ("prior", "Prior work", "What methods and results have been reported for {topic}?"),
-    ("data_lit", "Datasets used in the literature", "Which datasets have been used for {topic}, and are they "
+QUESTIONS: tuple[tuple[str, str], ...] = (  # (key, question); headings come from the core catalog (ADR-246)
+    ("prior", "What methods and results have been reported for {topic}?"),
+    ("data_lit", "Which datasets have been used for {topic}, and are they "
      "publicly available?"),
-    ("difficulties", "Reported difficulties", "Which difficulties or limitations are reported for {topic}?"),
+    ("difficulties", "Which difficulties or limitations are reported for {topic}?"),
 )
 DIMENSIONS = ("literature", "data", "compute", "time")
 
@@ -137,30 +138,33 @@ def assess(f: dict[str, Any], done: dict[str, Any]) -> dict[str, tuple[str, str]
     return {"literature": lit, "data": _data(f), "compute": _compute(f), "time": _time(f)}
 
 
-def _tail(conn: sqlite3.Connection, subject: dict[str, Any], done: dict[str, Any]) -> list[tuple[str, str, str]]:
+def _tail(conn: sqlite3.Connection, subject: dict[str, Any], done: dict[str, Any],
+          T: Bound) -> list[tuple[str, str, str]]:
+    """Dataset lines and the status table; dimension names, status values and the computed reasons are protocol
+    values / recorded facts and stay as they are (ADR-246)."""
     f = subject["facts"]
     status = assess(f, done)
-    data = "\n".join(f"- {d['name']} {d['version']}: licence {d['license'] or 'not recorded'}, egress {d['egress']}, "
-                     f"group key {d['group_key'] or 'none'}" for d in f["datasets"]) or "- none selected"
-    table = "\n".join(["| Dimension | Status | Reason |", "|---|---|---|",
+    data = "\n".join(T("fs_dataset_line", name=d["name"], version=d["version"],
+                       license=d["license"] or T("fs_not_recorded"), egress=d["egress"],
+                       group_key=d["group_key"] or T("fs_no_group_key")) for d in f["datasets"]) or T("fs_no_dataset")
+    table = "\n".join([T("fs_table_header"), "|---|---|---|",
                        *(f"| {k} | {status[k][0]} | {status[k][1]} |" for k in DIMENSIONS)])
     return [("facts", data, "registered dataset records"),
             ("status", table, "computed from recorded facts and verified answers only")]
 
 
-SPEC = cards.CardSpec("feasibility", "Feasibility", QUESTIONS,
-                      (("facts", "Data on record"), ("status", "Status by dimension")), "Owner decision", _tail,
-                      scope="project")
+SPEC = cards.CardSpec("feasibility", QUESTIONS, ("facts", "status"), True, _tail, scope="project")
 
 
 def create(conn: sqlite3.Connection, gw: Gateway, doc_kinds: Any, registry: TemplateRegistry,
            gpu: Callable[[], dict[str, Any]], subject: dict[str, Any], *, project_id: str, actor: str,
-           progress: dict[str, Any] | None = None, checkpoint: Callable[[], None] = lambda: None) -> dict[str, Any]:
+           progress: dict[str, Any] | None = None, checkpoint: Callable[[], None] = lambda: None,
+           language: str = DEFAULT_LANGUAGE) -> dict[str, Any]:
     progress = progress if progress is not None else {}
     if "facts" not in progress:  # observed once per intent, so a resumed check reports the same facts
         progress["facts"] = facts(conn, registry, gpu(), subject)
         checkpoint()
     out = cards.create(conn, gw, doc_kinds, SPEC, {**subject, "facts": progress["facts"]}, project_id=project_id,
-                       actor=actor, progress=progress, checkpoint=checkpoint)
+                       actor=actor, progress=progress, checkpoint=checkpoint, language=language)
     return {**out, "facts": progress["facts"],
             "status": {k: {"status": s, "reason": r} for k, (s, r) in assess(progress["facts"], out["fields"]).items()}}

@@ -1,5 +1,6 @@
 """Library: citekeys bound to evidence, bibliography export (BibTeX/RIS/CSL-JSON), tags/collections, backlinks,
-global search, and file imports (BibTeX/RIS/CSL-JSON/Zotero RDF via FileImporters) into the candidate list."""
+global search, file imports (BibTeX/RIS/CSL-JSON/Zotero RDF via FileImporters) into the candidate list, and the
+owner's review of title-based identification suggestions."""
 from __future__ import annotations
 
 import hashlib
@@ -12,7 +13,8 @@ from pydantic import BaseModel, Field
 from ...contracts.errors import ApiError
 from ...contracts.importers import FileImportRequest
 from ...services.identity.sessions import Principal
-from ...services.literature import bibexport, citekeys, discovery, library_index, weight
+from ...services.knowledge.writer import DbKnowledgeWriter
+from ...services.literature import bibexport, citekeys, discovery, identify_title, library_index, weight
 from ..deps import db, principal, services
 
 router = APIRouter(prefix="/api/v1", tags=["library"])
@@ -117,3 +119,26 @@ def import_tiers(data: TiersIn, p: Principal = Depends(principal), conn: sqlite3
 def work_weight(work_id: str, p: Principal = Depends(principal), conn: sqlite3.Connection = Depends(db)
                 ) -> dict[str, Any]:
     return weight.weight(conn, work_id)
+
+
+# ---- title-based identification: suggestions the owner confirms or rejects (ADR-233) ----
+
+@router.get("/library/identifications")
+def identifications(p: Principal = Depends(principal), conn: sqlite3.Connection = Depends(db)
+                    ) -> list[dict[str, Any]]:
+    return identify_title.pending(conn)
+
+
+@router.post("/library/identifications/{ident_id}/confirm")
+def confirm_identification(ident_id: str, request: Request, p: Principal = Depends(principal),
+                           conn: sqlite3.Connection = Depends(db)) -> dict[str, Any]:
+    svc = services(request)
+    writer = DbKnowledgeWriter(conn, svc.blobs, svc.kinds, plugin="core.identify", actor=p.actor, project_id=None,
+                               max_bytes=svc.settings.max_upload_mb * 1024 * 1024)
+    return {"work_id": identify_title.confirm(conn, writer, ident_id, svc.settings.data_dir)}
+
+
+@router.post("/library/identifications/{ident_id}/reject", status_code=204)
+def reject_identification(ident_id: str, p: Principal = Depends(principal),
+                          conn: sqlite3.Connection = Depends(db)) -> None:
+    identify_title.reject(conn, ident_id, p.actor)

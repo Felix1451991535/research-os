@@ -79,7 +79,11 @@ it("exports run slides in one click and links the file for download", async () =
   const p = await renderPage(<ExperimentRunPage />, "/experiments/tasks/:taskId", "/experiments/tasks/t");
   try {
     await p.flush(); await p.click("Export slides");
-    expect(post).toHaveBeenCalledWith("/exports/report_slides", { run_id: "r", mode: "final" }, expect.objectContaining({ idempotencyKey: expect.any(String) }));
+    expect(post).toHaveBeenCalledWith("/exports/report_slides", { run_id: "r", mode: "final", options: { language: "en" } }, expect.objectContaining({ idempotencyKey: expect.any(String) }));
+    const select = document.getElementById("run-export-language") as HTMLSelectElement;  // ADR-234: English by default
+    await act(async () => { select.value = "zh-CN"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await p.click("Export slides");
+    expect(post).toHaveBeenLastCalledWith("/exports/report_slides", { run_id: "r", mode: "final", options: { language: "zh-CN" } }, expect.objectContaining({ idempotencyKey: expect.any(String) }));
     const link = p.host.querySelector("a[download]");
     expect(link?.getAttribute("href")).toBe("/api/v1/exports/exp1/files/report.pptx");
     expect(p.host.textContent).toContain("empty_section");

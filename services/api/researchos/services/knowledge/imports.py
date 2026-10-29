@@ -29,7 +29,7 @@ def subject_hash(conn: sqlite3.Connection, subject_id: str) -> str:
 
 def consume_approval(conn: sqlite3.Connection, records: list[BibRecord], actor: str) -> str:
     h = records_hash(records)
-    with tx(conn):
+    with tx(conn, join=True):  # a caller may record the use in the same transaction (deep research, Review #98)
         a = row(conn.execute("SELECT * FROM approvals WHERE subject_type='knowledge_import' AND subject_id=? AND "
                              "subject_hash=? AND revoked_at IS NULL AND consumed_at IS NULL AND expires_at>? "
                              "ORDER BY created_at DESC LIMIT 1", (h, h, utcnow())))

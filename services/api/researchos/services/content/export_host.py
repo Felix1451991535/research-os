@@ -24,7 +24,9 @@ from ...contracts.exporters import (
 from ...kernel.db import jload, new_id, row, rows, tx, utcnow
 from ...kernel.events import emit
 from ...platform.paths import has_reparse_point
+from ...sdk.texts import DEFAULT_LANGUAGE, Bound, export_language, snapshot_language
 from .citekey_index import lookup_work
+from .texts import CORE
 
 
 @dataclass
@@ -90,19 +92,40 @@ class DbExportContext:
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
 
-def _figures(conn: sqlite3.Connection, run_id: str) -> list[Block]:
+def _figures(conn: sqlite3.Connection, run_id: str, T: Bound) -> list[Block]:
     q = "SELECT id, path FROM artifacts WHERE run_id=? AND kind='figure' ORDER BY path"
     figs = rows(conn.execute(q, (run_id,)))
     if not figs:
         return []
-    out = [Block("heading", (TextSpan("Figures"),))]
+    out = [Block("heading", (TextSpan(T("figures")),))]
     for i, f in enumerate(figs, start=1):
         name = f["path"].rsplit("/", 1)[-1]
-        out.append(Block("figure", artifact_id=f["id"], caption=(TextSpan(f"Figure {i}. {name} (run artifact)"),)))
+        out.append(Block("figure", artifact_id=f["id"], caption=(TextSpan(T("figure_caption", n=i, name=name)),)))
     return out
 
 
-def snapshot_from_run(conn: sqlite3.Connection, data_dir: Path, run_id: str) -> ReportSnapshot:
+def _predictions(plan: dict[str, Any], T: Bound) -> list[Block]:
+    if not plan.get("predictions"):
+        return []
+    lines = [T("prediction_prior", metric=p["metric"], expected=p["expected"], prior=p["prior"]) if "prior" in p
+             else T("prediction", metric=p["metric"], expected=p["expected"]) for p in plan["predictions"]]
+    return [Block("heading", (TextSpan(T("predictions")),)), *(Block("list", (TextSpan(x),)) for x in lines)]
+
+
+def _provenance(m: dict[str, Any], T: Bound) -> list[Block]:
+    t = m["template"]
+    lines = (T("prov_template", id=t["id"], version=t["version"], hash=t["hash"][:12]),
+             T("prov_dataset", dataset=m.get("dataset")), T("prov_split", split_hash=m.get("split_hash")),
+             T("prov_seed", seed=m["seed"], params=m["params"]),
+             T("prov_git", git=m["git"], env_lock=m.get("env_lock")),
+             T("prov_device", device=m["device"]), T("prov_python", python=m["python"], platform=m["platform"]))
+    return [Block("heading", (TextSpan(T("provenance")),)), *(Block("list", (TextSpan(x),)) for x in lines)]
+
+
+def snapshot_from_run(conn: sqlite3.Connection, data_dir: Path, run_id: str, language: str = DEFAULT_LANGUAGE
+                      ) -> ReportSnapshot:
+    """The run report in `language` (fixed text from the core catalog; data and protocol values as recorded)."""
+    T = CORE.lang(language)
     r = row(
         conn.execute(
             "SELECT r.*, t.state AS task_state FROM runs r JOIN tasks t ON t.id=r.task_id WHERE r.id=?", (run_id,)
@@ -118,65 +141,35 @@ def snapshot_from_run(conn: sqlite3.Connection, data_dir: Path, run_id: str) -> 
         )
     )
     plan: dict[str, Any] = jload(rev["content"]) if rev else {}
-    t = m["template"]
+    summary = T("run_summary", plan_id=m["plan"]["id"], revision=m["plan"]["revision"], hash=m["plan"]["hash"][:12],
+                stage=m["stage"], state=r["task_state"])
     b: list[Block] = [
-        Block(
-            "paragraph",
-            (
-                TextSpan(
-                    f"Plan {m['plan']['id']} rev {m['plan']['revision']} (hash "
-                    f"{m['plan']['hash'][:12]}) · stage {m['stage']} · state {r['task_state']}"
-                ),
-            ),
-        ),
-        Block("heading", (TextSpan("Hypothesis (pre-registered)"),)),
+        Block("paragraph", (TextSpan(summary),)),
+        Block("heading", (TextSpan(T("hypothesis")),)),
         Block("paragraph", (TextSpan(plan.get("hypothesis", "")),)),
+        *_predictions(plan, T),
     ]
-    if plan.get("predictions"):
-        b.append(Block("heading", (TextSpan("Predictions (pre-registered)"),)))
-        b += [
-            Block(
-                "list",
-                (
-                    TextSpan(
-                        f"{p['metric']}: expected {p['expected']}" + (f" (prior {p['prior']})" if "prior" in p else "")
-                    ),
-                ),
-            )
-            for p in plan["predictions"]
-        ]
     metrics = rows(conn.execute("SELECT * FROM run_metrics WHERE run_id=? ORDER BY name", (run_id,)))
-    b.append(Block("heading", (TextSpan("Metrics"),)))
-    b.append(
-        Block(
-            "table",
-            rows=(
-                ((TextSpan("metric"),), (TextSpan("split"),), (TextSpan("value"),)),
-                *(
-                    ((TextSpan(x["name"]),), (TextSpan(x["split"]),), (MetricSpan(run_id, x["name"], x["split"]),))
-                    for x in metrics
-                ),
-            ),
-        )
-    )
-    b += _figures(conn, run_id)
+    b.append(Block("heading", (TextSpan(T("metrics")),)))
+    header = ((TextSpan(T("col_metric")),), (TextSpan(T("col_split")),), (TextSpan(T("col_value")),))
+    b.append(Block("table", rows=(header, *(((TextSpan(x["name"]),), (TextSpan(x["split"]),),
+                                             (MetricSpan(run_id, x["name"], x["split"]),)) for x in metrics))))
+    b += _figures(conn, run_id, T)
     sig = rows(conn.execute("SELECT * FROM health_signals WHERE run_id=? ORDER BY created_at", (run_id,)))
-    b.append(Block("heading", (TextSpan("Health signals"),)))
+    b.append(Block("heading", (TextSpan(T("health_signals")),)))
     b += [Block("list", (TextSpan(f"{s['severity']} {s['detector']}: {s['rule']}"),)) for s in sig] or [
-        Block("list", (TextSpan("none"),))
+        Block("list", (TextSpan(T("none")),))
     ]
-    b.append(Block("heading", (TextSpan("Provenance"),)))
-    for line in (
-        f"template {t['id']} v{t['version']} hash {t['hash'][:12]}",
-        f"dataset {m.get('dataset')}",
-        f"split hash {m.get('split_hash')}",
-        f"seed {m['seed']} · params {m['params']}",
-        f"git {m['git']} · env lock {m.get('env_lock')}",
-        f"device {m['device']} (label only; not a GPU acceptance)",
-        f"python {m['python']} · {m['platform']}",
-    ):
-        b.append(Block("list", (TextSpan(line),)))
-    return ReportSnapshot(run_id, 1, f"Run report {run_id}", "en", tuple(b), "report")
+    b += _provenance(m, T)
+    return ReportSnapshot(run_id, 1, T("run_title", run_id=run_id), snapshot_language(language), tuple(b), "report")
+
+
+def language_of(options: dict[str, Any]) -> str:
+    """The export's `language` option (en default); 422 `bad_language` otherwise."""
+    try:
+        return export_language(options)
+    except ValueError as e:
+        raise ApiError(422, "bad_language", str(e)) from e
 
 
 def publish(
@@ -191,6 +184,7 @@ def publish(
 ) -> dict[str, Any]:
     if snapshot.kind not in exporter.spec.doc_kinds:
         raise ApiError(422, "unsupported_doc_kind", f"{exporter.spec.name} does not export {snapshot.kind}")
+    language_of(options)  # every exporter gets a valid `language` option (ADR-234)
     eid = export_id or new_id("exp")
     out = data_dir / "exports" / f"{snapshot.doc_id}-{exporter.spec.name}-{eid}"
     out.mkdir(parents=True, exist_ok=True)

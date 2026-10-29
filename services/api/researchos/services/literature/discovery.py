@@ -2,7 +2,9 @@
 
 Every run is logged (lit_search_runs: per-source returned/total/warnings/errors -> PRISMA "records identified");
 one failing source never hides the others' results (its error is recorded). Network only through HostHttp with the
-plugin's granted hosts; settings are the owner's stored settings (secrets backend-only).
+plugin's granted hosts; settings are the owner's stored settings (secrets backend-only). Egress (ADR-232): what a
+source would receive (query text, filters, a chaining seed) passes the central egress gate first; content from a
+local_only dataset (declared in Ctx.data_refs or detected) never reaches a source that is not `location = "local"`.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from ...kernel.db import jdump, new_id, tx, utcnow
 from ...kernel.events import emit
 from .. import plugin_settings
 from ..extensions import Extensions
+from ..gateway import egress
 from ..gateway.keystore import SecretStore
 from ..knowledge.http_fetch import HostHttp
 from . import candidates
@@ -32,10 +35,40 @@ class Ctx:
     keystore: SecretStore
     actor: str
     project_id: str | None = None
+    data_refs: tuple[egress.DataRef, ...] = ()  # datasets / answers whose content the query may carry
 
 
-def _run_source(conn: sqlite3.Connection, ctx: Ctx, name: str, call: Call) -> tuple[SearchPage | None, dict[str, Any]]:
+def _egress_block(conn: sqlite3.Connection, ctx: Ctx, name: str, src: Any, sent: list[str]) -> str | None:
+    """The reason this source may not receive `sent` (None = allowed). Sources are remote unless they declare
+    location = "local" (same default as model providers, ADR-159)."""
+    if getattr(src, "location", "cloud") == "local":
+        return None
+    d = egress.check(conn, ctx.data_refs, sent)
+    if not d.local_only:
+        return None
+    with tx(conn, join=True):
+        emit(conn, "gateway.egress_blocked", actor=ctx.actor, project_id=ctx.project_id,
+             data={"datasets": list(d.datasets), "how": d.how, "source": name})
+    return egress.describe(d)
+
+
+def _strings(value: Any) -> list[str]:
+    """Every string in a (nested) dict / list / tuple: what an egress check must see of a structured payload."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [t for v in value.values() for t in _strings(v)]
+    if isinstance(value, (list, tuple)):
+        return [t for v in value for t in _strings(v)]
+    return []
+
+
+def _run_source(conn: sqlite3.Connection, ctx: Ctx, name: str, call: Call, sent: list[str]
+                ) -> tuple[SearchPage | None, dict[str, Any]]:
     src = ctx.ext.sources[name]
+    blocked = _egress_block(conn, ctx, name, src, sent)
+    if blocked:
+        return None, {"error": f"egress_blocked: {blocked}"}
     http = HostHttp(ctx.ext.granted_hosts(f"datasources:{name}", src.spec.hosts))
     try:
         settings = plugin_settings.effective(conn, ctx.keystore, ctx.ext, "datasources", name, None)
@@ -88,7 +121,8 @@ def search(conn: sqlite3.Connection, ctx: Ctx, text: str, sources: list[str], *,
     results: dict[str, Any] = {}
     pages: dict[str, SearchPage] = {}
     for name in sources:
-        page, results[name] = _run_source(conn, ctx, name, lambda s, h, st: s.search(q, h, st))
+        page, results[name] = _run_source(conn, ctx, name, lambda s, h, st: s.search(q, h, st),
+                                          [text, *(filters or {}).values()])
         if page is not None:
             pages[name] = page
     run = _record_run(conn, ctx, kind, {"text": text, "filters": filters or {}, "page_size": page_size}, results,
@@ -108,9 +142,10 @@ def chain(conn: sqlite3.Connection, ctx: Ctx, record: BibRecord, direction: str,
                        details={"capable": capable})
     results: dict[str, Any] = {}
     pages: dict[str, SearchPage] = {}
+    seed = _strings(asdict(record))  # every field the source receives, not only title/ids/authors (Review #90)
     for name in use:
         page, results[name] = _run_source(
-            conn, ctx, name, lambda s, h, st: getattr(s, direction)(record, h, st, None, page_size))
+            conn, ctx, name, lambda s, h, st: getattr(s, direction)(record, h, st, None, page_size), seed)
         if page is not None:
             pages[name] = page
     run = _record_run(conn, ctx, direction, {"seed": asdict(record)}, results, pages, None)

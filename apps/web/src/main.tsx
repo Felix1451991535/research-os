@@ -5,6 +5,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { createStore, del, get, set } from "idb-keyval";
+import { useTranslation } from "react-i18next";
 import { Toaster } from "sonner";
 import { ApiError, OfflineError } from "@/api/client";
 import { qk } from "@/api/queries";
@@ -37,6 +38,13 @@ const persister = createAsyncStoragePersister({
   storage: { getItem: (k) => get(k, store), setItem: (k, v) => set(k, v, store), removeItem: (k) => del(k, store) },
 });
 
+/** Toasts with translated screen-reader labels (the library defaults are English; found by the zh text scan). */
+function LocalizedToaster() {
+  const { t } = useTranslation();
+  return <Toaster position="bottom-right" richColors closeButton customAriaLabel={t("common.notifications")}
+    toastOptions={{ closeButtonAriaLabel: t("common.close") }} />;
+}
+
 if ("serviceWorker" in navigator && window.isSecureContext && import.meta.env.PROD) {
   void navigator.serviceWorker.register("/sw.js");
 }
@@ -47,7 +55,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
       <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 7 * 24 * 3600_000 }}>
         <TooltipProvider>
           <App />
-          <Toaster position="bottom-right" richColors closeButton />
+          <LocalizedToaster />
         </TooltipProvider>
       </PersistQueryClientProvider>
     </ThemeProvider>

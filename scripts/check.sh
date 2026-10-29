@@ -10,6 +10,11 @@ echo "== ruff ==";          $PY/ruff check services/api workers tests scripts
 echo "== mypy ==";          $PY/mypy
 echo "== import-linter =="; $PY/lint-imports
 echo "== arch health ==";   $PY/python scripts/arch_health.py "$@"
+if [ -d scripts/public ]; then  # maintainer tooling; the public export itself never contains scripts/public/
+  echo "== public export: tooling tests + leak scan of an export built from this tree (ADR-226) =="
+  $PY/python -m pytest -q -p no:warnings -o addopts="" scripts/public/tests
+  $PY/python scripts/public/scan.py --export-from .
+fi
 if [ -n "$PWSH" ]; then
   echo "== powershell parse + analyzer =="
   $PWSH -NoProfile -File scripts/check_ps1.ps1

@@ -5,7 +5,7 @@ import i18n from "@/i18n";
 import { ApiError, describeError } from "@/api/client";
 import { authCalls } from "@/api/queries";
 import { Field, Input } from "@/components/ui/input";
-import { formatNumber, humanize, newKey } from "@/lib/utils";
+import { cn, formatNumber, humanize, newKey } from "@/lib/utils";
 import { Link } from "react-router";
 import type { Task } from "@/api/types";
 import { EmptyState } from "@/components/layout/state";
@@ -39,9 +39,9 @@ function Value({ value, depth }: { value: unknown; depth: number }) {
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>);
     if (!entries.length) return <span className="text-muted-foreground">{t("common.none")}</span>;
-    return <dl className={depth ? "grid gap-1 border-l pl-3" : "grid gap-2"}>{entries.map(([k, v]) => <div key={k} className="grid gap-x-3 sm:grid-cols-[12rem_1fr]">
+    return <dl className={depth ? "grid gap-1 border-l pl-3" : "grid gap-2"}>{entries.map(([k, v]) => <div key={k} className={cn("grid gap-x-3", depth ? "sm:grid-cols-[minmax(5rem,10rem)_minmax(0,1fr)]" : "sm:grid-cols-[minmax(6rem,12rem)_minmax(0,1fr)]")}>
       <dt className="text-body-sm font-medium text-muted-foreground">{humanize(k)}</dt>
-      <dd className="min-w-0"><Value value={v} depth={depth + 1} /></dd></div>)}</dl>;
+      <dd className="min-w-0 wrap-anywhere"><Value value={v} depth={depth + 1} /></dd></div>)}</dl>;
   }
   return <Scalar value={value} />;
 }

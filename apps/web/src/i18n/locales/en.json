@@ -7,6 +7,7 @@
     "description": "Interface language on this device. Data, model output and server messages that have no translation stay as sent."
   },
   "common": {
+    "notifications": "Notifications",
     "cancel": "Cancel",
     "save": "Save",
     "close": "Close",
@@ -77,6 +78,31 @@
     "notComparableWindows": "the runs' predictions cover different windows or labels",
     "notEligible": "include at title/abstract stage before full-text screening",
     "approvalNotFound": "approval not found",
+    "answerNotFound": "answer not found",
+    "canaryNotFound": "canary not found",
+    "candidateNotFound": "candidate not found",
+    "citekeyNotFound": "citekey not found",
+    "contradictionNotFound": "contradiction not found",
+    "datasetNotFound": "dataset not found",
+    "decisionNotFound": "decision not found",
+    "deepResearchNotFound": "deep research run not found",
+    "docNotFound": "doc not found",
+    "documentNotFound": "document not found",
+    "effectPlanNotFound": "effect plan not found",
+    "exportFileNotFound": "export file not found",
+    "figureNotFound": "figure not found",
+    "identificationNotFound": "identification suggestion not found",
+    "pageNotFoundGeneric": "page not found",
+    "planNotFound": "plan not found",
+    "planRevisionNotFound": "plan revision not found",
+    "projectNotFound": "project not found",
+    "reviewNotFound": "review not found",
+    "runNotFound": "run not found",
+    "savedSearchNotFound": "saved search not found",
+    "searchRunNotFound": "search run not found",
+    "studyNotFound": "study not found",
+    "suggestionNotFound": "suggestion not found",
+    "workNotFound": "work not found",
     "deviceNotFound": "device not found",
     "taskNotFound": "task not found",
     "unknownCandidate": "unknown candidate id in selection",
@@ -106,7 +132,8 @@
     "lengthRequired": "Content-Length required",
     "badContentLength": "invalid Content-Length",
     "idempotencyKeyMissing": "Idempotency-Key header required",
-    "idempotencyMismatchTask": "Idempotency-Key reused for a different task"
+    "idempotencyMismatchTask": "Idempotency-Key reused for a different task",
+    "identificationDecided": "This suggestion was already confirmed or rejected."
   },
   "app": {
     "notFoundTitle": "Page not found",
@@ -169,7 +196,8 @@
     "blocked": "Blocked"
   },
   "export": {
-    "resultTitle": "Export result"
+    "resultTitle": "Export result",
+    "languageLabel": "Document language"
   },
   "auth": {
     "desktopBrowser": "Desktop browser",
@@ -367,7 +395,8 @@
     "tierSource": "Tier source",
     "tierYear": "Tier year",
     "tierEntries": "Tier entries (JSON)",
-    "tierEntriesHint": "Example: [{\"venue\":\"Journal name\",\"tier\":\"Q1\"}]",
+    "tierEntriesHint": "Example:",
+    "tierEntriesExample": "[{\"venue\":\"Journal name\",\"tier\":\"Q1\"}]",
     "replaceButton": "Replace venue tiers",
     "updating": "Updating evidence labels…"
   },
@@ -401,6 +430,51 @@
     "workerDown": "The worker is not running: queued tasks wait, and \"running\" tasks are not progressing. Start it with start.ps1.",
     "emptyTitle": "No tasks yet",
     "emptyBody": "Imports and experiments appear here with their real status."
+  },
+  "gateDiagnostics": {
+    "severity": {
+      "error": "error",
+      "warning": "warning"
+    },
+    "unresolved_citation": "citekey {{ref}} is not in the library",
+    "retracted_citation": "{{ref}} cites a RETRACTED work",
+    "unresolved_metric": "no stored metric {{ref}}",
+    "metric_failed": "{{ref}} failed recomputation",
+    "metric_unverified": "{{ref}} is not verified by recomputation",
+    "evidence_missing": "evidence {{ref}} does not exist",
+    "evidence_stale": "evidence {{ref}}: the source changed since the quote was verified",
+    "evidence_failed": "evidence {{ref}} has trust 'failed' (e.g. retracted source)",
+    "evidence_superseded": "evidence {{ref}} is on an older version",
+    "malformed_placeholder": "unrecognised placeholder",
+    "free_number": "number {{ref}} has no source: use a metric, cite evidence whose quote contains it, or mark it as a literal",
+    "missing_artifact": "figure artifact {{ref}} not found"
+  },
+  "taskStages": {
+    "parsing": "parsing",
+    "sleeping": "waiting",
+    "running": "running",
+    "records": "reading records",
+    "read": "reading files",
+    "subjects": "reading subjects",
+    "windows": "cutting windows",
+    "features": "computing features",
+    "fit": "fitting the model",
+    "done": "finishing",
+    "cancelled": "cancelled"
+  },
+  "docKinds": {
+    "note": "note",
+    "report": "report",
+    "manuscript": "manuscript",
+    "paper_card": "paper card",
+    "methods_checklist": "methods checklist",
+    "feasibility": "feasibility check"
+  },
+  "sentenceKinds": {
+    "source_fact": "source fact",
+    "author_conclusion": "author's conclusion",
+    "model_inference": "model inference",
+    "hypothesis": "hypothesis"
   },
   "literature": {
     "title": "Literature",
@@ -707,7 +781,8 @@
     "noneSelected": "None selected",
     "check": "Check feasibility",
     "axes": "Gap map axes (one or two lines)",
-    "axesHint": "paradigm: motor imagery, sleep staging | sleep scoring",
+    "axesHint": "One axis per line - name: term, term; | separates alternative wordings. Terms match the claim text as written, e.g.",
+    "axesExample": "paradigm: motor imagery, sleep staging | sleep scoring",
     "map": "Map evidence gaps",
     "openDoc": "Open the feasibility document",
     "gapIntro": "{{count}} verified claims; a gap means no verified claim in this library, not absence from the literature.",
@@ -736,7 +811,7 @@
     "progressAria": "Download progress",
     "installingHint": "Research OS closes, installs the update silently and starts again. Your data is kept. If setup fails, the current version is restored.",
     "readyManual": "The installer was downloaded and its checksum verified. Automatic install works only in the installed Windows version; run this file yourself:",
-    "noAutoCheck": "No automatic checks. The installer's sha256 is verified before anything is installed.",
+    "noAutoCheck": "No automatic checks. The release information must carry a valid signature, and the installer's sha256 is verified before anything is installed.",
     "mirrorLabel": "Download mirror (optional)",
     "mirrorHint": "A URL prefix put in front of GitHub links, e.g. https://ghfast.top/. Leave empty for a direct connection.",
     "mirrorPlaceholder": "https://ghfast.top/",
@@ -752,7 +827,21 @@
       "update_busy": "A download is already running.",
       "update_not_ready": "Download and verify the update first.",
       "update_unsupported": "Automatic install needs the installed Windows version. Run the downloaded setup yourself.",
-      "update_launch_failed": "The installer could not be started. The current version is unchanged."
-    }
+      "update_launch_failed": "The installer could not be started. The current version is unchanged.",
+      "update_unsigned": "The release information is not signed. It was refused; nothing was downloaded or changed.",
+      "update_bad_signature": "The release information has an invalid signature. It was refused; nothing was downloaded or changed.",
+      "update_incomplete": "The download stopped before it was complete and was deleted. Nothing was changed. Try again.",
+      "update_disk_full": "Not enough disk space for the update download. Free some space and try again. Nothing was changed.",
+      "update_write_failed": "The update download could not be saved. Nothing was changed.",
+      "update_asset_missing": "The new release does not offer its installer for download yet. Try again later.",
+      "update_mirror_failed": "The download mirror did not work. Retry without the mirror, or change the mirror."
+    },
+    "retryDirect": "Retry without the mirror",
+    "whatsNewTitle": "What's new in {{version}}",
+    "whatsNewEmpty": "This release has no release notes.",
+    "whatsNewOk": "Got it",
+    "diagnosticsTitle": "Diagnostics",
+    "diagnosticsHint": "Saves a zip with the setup, launcher and update logs, the version, OS facts and recent task errors for a bug report. API keys, folder paths, user names and e-mail addresses are removed; your documents and notes are not included. Nothing is sent: check the file, then attach it yourself.",
+    "diagnosticsExport": "Export diagnostics"
   }
 }

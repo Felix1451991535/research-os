@@ -75,22 +75,40 @@ regardless: test data are never materialized into run dirs, child processes get 
 provider keys, only reviewed templates run. (Execution under `run_as_user` lands with the executor in M2.)
 
 ## Updates (ADR-223/224; **Windows: NOT RUN**)
-Settings > About / Updates: "Check for updates" asks GitHub Releases (only when clicked; never at startup). If a newer
-version exists, "Update" downloads `ResearchOS-Setup-<v>.exe`, verifies its sha256 and, on the installed Windows
-version, restarts into the silent setup (`/S /RUNAFTER`). Your data\ is kept. If setup fails, the previous version
-is restored and started again; see `<install>\install.log` and `data\logs\update.log`. Behind the GFW, set a mirror
-prefix such as `https://ghfast.top/` (or `update_mirror_prefix` in researchos.toml). Manual update: run the newer
+Settings > About / Updates: "Check for updates" asks GitHub Releases (only when clicked; never at startup). The
+release information is refused unless it is signed by a built-in key (ADR-228). If a newer version exists, "Update"
+downloads `ResearchOS-Setup-<v>.exe`, verifies its sha256 and, on the installed Windows version, restarts into the
+silent setup (`/S /RUNAFTER /KEEPPREV`), then waits for the new version to answer; if it does not within 2 minutes,
+the previous version is put back and started. Your data\ is kept. See `<install>\install.log` and
+`data\logs\update.log`. Behind the GFW, set a mirror prefix such as `https://ghfast.top/` (or `update_mirror_prefix`
+in researchos.toml); if the mirror fails, the page offers "Retry without the mirror". Manual update: run the newer
 setup exe; silent: `ResearchOS-Setup-<v>.exe /S`.
 
 ## Release (maintainer, Linux build box; ADR-225)
 1. `.venv/bin/python scripts/release/bump_version.py <v>`, then `scripts/check.sh` (tests/test_version.py checks every
    copy); commit.
 2. `.venv/bin/python scripts/build_package.py` -> `release/ResearchOS-Setup-<v>.exe`.
-3. `.venv/bin/python scripts/release/manifest.py --notes-file notes.md` -> `<exe>.sha256` + `release/latest.json`.
+3. `.venv/bin/python scripts/release/manifest.py --notes-file notes.md [--notes-zh-file notes.zh.md]` ->
+   `<exe>.sha256`, `release/latest.json` and its signature `release/latest.json.sig` (key: `$RESEARCHOS_UPDATE_KEY`,
+   default `~/.config/researchos/keys/update-release.pem`; never in the repo; back it up and the backup key
+   `update-backup.pem` separately - without them no update can be published to installed copies).
 4. `.venv/bin/python scripts/release/e2e_check.py --exe release/ResearchOS-Setup-<v>.exe` -> must print `RESULT: PASS`
    (install step NOT RUN by design).
 5. `.venv/bin/python scripts/release/publish.py` prints the preflight and the tag / push / `gh release create`
    commands (dry run); add `--yes` to execute them (needs `gh auth login`).
+
+## Public export + daily check (maintainer, private repo only; ADR-226/227)
+- Leak gate (part of check.sh): `.venv/bin/python scripts/public/scan.py --export-from .`. Owner-identifying patterns
+  are read from `$RESEARCHOS_LEAK_PATTERNS` (default `~/.config/researchos/leak_patterns.json`, outside the repo).
+  The gate (and the daily check) FAILS when that file is missing or invalid (exit 2); `--generic-only` runs only the
+  generic patterns and is not a publication gate. Files that are neither UTF-8/16/32 text nor listed in
+  `APPROVED_BINARY` (scan.py) are `uninspectable` hits: add a new binary there only after looking at it.
+- Build the export for a sync: `.venv/bin/python scripts/public/build_export.py . <public clone>` (keeps its .git),
+  then review `git -C <public clone> status` by hand; nothing is pushed by any script.
+- Daily check: `.venv/bin/python scripts/public/daily_check.py` writes
+  `~/.local/share/researchos/daily/YYYYMMDD-daily-check.md` (`--offline` skips the GitHub read; `--issues-file` /
+  `--issues-url` read a saved or local feed). Cron (this box has no cron daemon installed today; NOT RUN):
+  `30 7 * * * cd <repo> && .venv/bin/python scripts/public/daily_check.py >/dev/null 2>&1`
 
 ## Backup / restore
 `backup` = SQLite online-backup snapshot + `raw/ runs/ exports/ datasets/` + non-secret config with a sha256

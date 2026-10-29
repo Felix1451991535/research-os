@@ -49,7 +49,7 @@ export function LibraryEvidence() {
       <h3>{t("evidence.replaceTitle")}</h3><p>{t("evidence.replaceIntro")}</p>
       <Field label={t("evidence.tierSource")} htmlFor="tier-source"><Input id="tier-source" required maxLength={100} value={source} disabled={action.isPending} onChange={e => setSource(e.target.value)} /></Field>
       <Field label={t("evidence.tierYear")} htmlFor="tier-year"><Input id="tier-year" type="number" required min={1900} max={2100} value={year} disabled={action.isPending} onChange={e => setYear(e.target.value)} /></Field>
-      <Field label={t("evidence.tierEntries")} htmlFor="tier-entries" hint={t("evidence.tierEntriesHint")}><Textarea id="tier-entries" required value={entries} disabled={action.isPending} onChange={e => setEntries(e.target.value)} /></Field>
+      <Field label={t("evidence.tierEntries")} htmlFor="tier-entries" hint={<>{t("evidence.tierEntriesHint")} <code>{t("evidence.tierEntriesExample")}</code></>}><Textarea id="tier-entries" required value={entries} disabled={action.isPending} onChange={e => setEntries(e.target.value)} /></Field>
       <Button type="submit" disabled={action.isPending}>{t("evidence.replaceButton")}</Button>
     </form>
     {action.isPending && <p role="status">{t("evidence.updating")}</p>}{action.error && <ErrorState error={action.error} />}{notice && <p role="status">{notice}</p>}

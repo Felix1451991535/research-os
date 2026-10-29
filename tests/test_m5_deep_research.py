@@ -17,6 +17,8 @@ from researchos.contracts.gateway import ChatRequest
 from researchos.services.container import Services
 from researchos.services.gateway import catalog, certification
 from researchos.services.knowledge.http_fetch import HostHttp
+from researchos.services.literature import importing
+from researchos.services.research import deep
 from researchos.services.research.deep_prompts import CONTRADICTIONS
 from researchos.services.research.qa_prompts import VERIFY_SUPPORT
 
@@ -88,7 +90,9 @@ def step(client: Any, conn: sqlite3.Connection, svc: Services, rid: str) -> dict
     return dict(client.get(f"/api/v1/research/deep/{rid}").json())
 
 
-def test_deep_research_end_to_end(client: Any, conn: sqlite3.Connection, svc: Services, world: dict) -> None:
+@pytest.mark.parametrize("language", [None, "zh-CN"])
+def test_deep_research_end_to_end(client: Any, conn: sqlite3.Connection, svc: Services, world: dict,
+                                  language: str | None) -> None:
     client.put("/api/v1/literature/settings", json={"pdf_download": True})
     pid = client.post("/api/v1/projects", json={"title": "HRV"}).json()["id"]
     criteria = {"include": ["HRV in humans with condition A"], "exclude": ["animal studies"],
@@ -96,9 +100,11 @@ def test_deep_research_end_to_end(client: Any, conn: sqlite3.Connection, svc: Se
                            "decision": "include", "reason": "about heart rate"},
                           {"id": "mice", "field": "title", "op": "contains", "value": "mice", "decision": "exclude",
                            "reason": "animal study"}]}
+    lang = {"language": language} if language else {}
     r = client.post("/api/v1/research/deep", json={"project_id": pid, "question": Q, "sources": ["fake_dr"],
-                                                   "criteria": criteria})
+                                                   "criteria": criteria, **lang})
     assert r.status_code == 201, r.text
+    assert r.json()["settings"]["language"] == (language or "en")
     rid = r.json()["id"]
     drain(conn, svc, max_tasks=5)
     st = client.get(f"/api/v1/research/deep/{rid}").json()
@@ -127,7 +133,12 @@ def test_deep_research_end_to_end(client: Any, conn: sqlite3.Connection, svc: Se
     assert report == []
     doc = conn.execute("SELECT body FROM docs WHERE id=?", (st["data"]["report_doc"],)).fetchone()[0]
     assert "{{evidence:" in doc and "{{cite:" in doc and "direction of the HRV change" in doc
-    assert "metadata only (no full text; not cited)" in doc  # the chained paper had no open PDF
+    if language is None:  # report fixed text in English by default (ADR-243)
+        assert "metadata only (no full text; not cited)" in doc  # the chained paper had no open PDF
+    else:  # the same report in Chinese: catalog text translated, data (question, statements, titles) as written
+        assert "仅元数据（无全文；未引用）" in doc and "## 局限性" in doc and f"# 深度调研：{Q}" in doc
+        for english in ("metadata only", "Records identified", "## Sources", "## Limitations", "_Trust:"):
+            assert english not in doc, english
     gate = client.get(f"/api/v1/docs/{st['data']['report_doc']}/check", params={"mode": "final"}).json()
     assert gate["ok"], gate["diagnostics"]  # the generated report is exportable as final (M6 gates)
     cl = client.get("/api/v1/claims", params={"project_id": pid}).json()
@@ -135,6 +146,61 @@ def test_deep_research_end_to_end(client: Any, conn: sqlite3.Connection, svc: Se
     c = cl["contradictions"][0]
     assert client.post("/api/v1/claims/contradictions/review",
                        json={"a": c["src"], "b": c["dst"], "status": "confirmed"}).json()["status"] == "confirmed"
+
+
+def _to_import_approval(client: Any, conn: sqlite3.Connection, svc: Services) -> str:
+    """A run with its plan approved, both screening rounds decided and the import selection approved."""
+    pid = client.post("/api/v1/projects", json={"title": "HRV"}).json()["id"]
+    criteria = {"include": [Q], "exclude": [], "rules": [{"id": "hrv", "field": "title", "op": "contains",
+                                                          "value": "heart rate", "decision": "include",
+                                                          "reason": "about heart rate"},
+                                                         {"id": "mice", "field": "title", "op": "contains",
+                                                          "value": "mice", "decision": "exclude", "reason": "animal"}]}
+    rid = str(client.post("/api/v1/research/deep", json={"project_id": pid, "question": Q, "sources": ["fake_dr"],
+                                                         "criteria": criteria}).json()["id"])
+    drain(conn, svc, max_tasks=5)
+    approve(client, "research_checkpoint", f"{rid}:plan")
+    step(client, conn, svc, rid)
+    for _ in range(2):
+        client.post(f"/api/v1/research/deep/{rid}/accept-suggestions")
+        st = step(client, conn, svc, rid)
+    assert st["stage"] == "awaiting_import_approval", st
+    approve(client, "knowledge_import", st["checkpoints"]["import"]["subject_id"])
+    return rid
+
+
+def test_a_takeover_during_importing_finishes_the_approved_import(client: Any, conn: sqlite3.Connection,
+                                                                  svc: Services, world: dict,
+                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review #98: importing consumed the approval and then ran without renewing its lease; a replacement advance
+    could not reuse the consumed approval and the original's final move was fenced, so the run stayed awaiting
+    approval with its imports lost. Now the authorization and per-candidate progress are in the run."""
+    client.put("/api/v1/literature/settings", json={"pdf_download": True})
+    rid = _to_import_approval(client, conn, svc)
+    real, calls, took_over = importing.import_candidates, [], {}
+
+    def slow_then_taken_over(c: sqlite3.Connection, *a: Any, **k: Any) -> Any:
+        calls.append(a[2])
+        out = real(c, *a, **k)
+        if len(calls) == 1:  # the lease expires during the first candidate and a replacement advance takes over
+            c.execute("UPDATE deep_research SET advance_until='2000-01-01T00:00:00.000+00:00' WHERE id=?", (rid,))
+            c.commit()
+            took_over["stage"] = deep.advance(c, svc, rid, "task:replacement")
+        return out
+
+    monkeypatch.setattr(importing, "import_candidates", slow_then_taken_over)
+    st = step(client, conn, svc, rid)
+    assert took_over["stage"] == "reading" and st["stage"] in ("reading", "synthesizing", "completed"), st
+    imported = [x["candidate_id"] for x in st["data"]["imported"]]
+    assert sorted(imported) == sorted(st["data"]["selection"]) and len(imported) == len(set(imported))
+    used = conn.execute("SELECT count(*) FROM approvals WHERE subject_type='knowledge_import' AND "
+                        "consumed_at IS NOT NULL").fetchone()[0]
+    assert used == 1  # no second approval
+    for _ in range(4):
+        if st["stage"] == "completed":
+            break
+        st = step(client, conn, svc, rid)
+    assert st["stage"] == "completed", st["data"]
 
 
 def test_plan_supplied_by_owner_and_bad_plan(client: Any, svc: Services, world: dict) -> None:
@@ -145,3 +211,6 @@ def test_plan_supplied_by_owner_and_bad_plan(client: Any, svc: Services, world: 
     bad = client.post("/api/v1/research/deep", json={"project_id": pid, "question": Q, "sources": ["fake_dr"],
                                                      "sub_questions": [{"q": "x", "queries": []}]})
     assert bad.json()["code"] == "bad_plan"
+    lang = client.post("/api/v1/research/deep", json={"project_id": pid, "question": Q, "sources": ["fake_dr"],
+                                                      "language": "fr"})
+    assert lang.status_code == 422

@@ -1,88 +1,23 @@
-"""One-click update (ADR-223) against a local fake GitHub release server (no internet): version comparison, sha256
-verification, timeout, network error, mirror prefix, install hand-off, and that nothing is checked at startup."""
+"""One-click update (ADR-223/228) against a local fake GitHub release server (no internet): version comparison, signed
+feed, sha256 verification, timeout, network error, mirror prefix, install hand-off, and that nothing is checked at
+startup. The fake release signs its feed with a test key the updater under test trusts (not the embedded keys)."""
 
 from __future__ import annotations
 
-import hashlib
 import json
-import socket
-import threading
-import time
 from collections.abc import Iterator
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-import researchos
 from researchos.kernel.config import Settings
-from researchos.services.ops.updater import UpdateError, Updater, install_dir, parse_release, validate_mirror
+from researchos.services.ops.update_feed import UpdateError, parse_release, validate_mirror
+from researchos.services.ops.update_signing import sign
+from researchos.services.ops.updater import Updater, install_dir
 
 from .conftest import Client
-
-CUR = researchos.__version__
-INSTALLER = b"MZ fake NSIS installer " * 4096
-
-
-class FakeRelease:
-    """Serves /<repo>/releases/latest/download/latest.json and the asset; `routes` can be rewritten per test.
-    Paths under /mirror/<full url> are served as the mirrored URL (like https://ghfast.top/<url>)."""
-
-    def __init__(self) -> None:
-        self.routes: dict[str, tuple[int, bytes, float]] = {}
-        self.hits: list[str] = []
-        outer = self
-
-        class H(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
-                path = self.path
-                outer.hits.append(path)
-                if path.startswith("/mirror/"):
-                    path = "/" + path.split("/", 5)[-1]  # /mirror/http://host:port/<path> -> /<path>
-                status, body, delay = outer.routes.get(path, (404, b"not found", 0.0))
-                time.sleep(delay)
-                try:
-                    self.send_response(status)
-                    self.send_header("content-length", str(len(body)))
-                    self.end_headers()
-                    self.wfile.write(body)
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
-
-            def log_message(self, *a: Any) -> None:
-                pass
-
-        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
-        self.base = f"http://127.0.0.1:{self.srv.server_address[1]}"
-        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
-
-    feed_path = "/owner/research-os/releases/latest/download/latest.json"
-
-    @property
-    def feed(self) -> str:
-        return self.base + self.feed_path
-
-    def publish(self, version: str, body: bytes = INSTALLER, sha: str | None = None, host: str | None = None) -> None:
-        asset = f"ResearchOS-Setup-{version}.exe"
-        path = f"/owner/research-os/releases/download/v{version}/{asset}"
-        meta = {"version": version, "asset": asset, "sha256": sha or hashlib.sha256(body).hexdigest(),
-                "url": (host or self.base) + path, "notes": f"notes for {version}"}
-        self.routes[self.feed_path] = (200, json.dumps(meta).encode(), 0.0)
-        self.routes[path] = (200, body, 0.0)
-
-
-def _bump(v: str, by: int) -> str:
-    major, minor, patch = (int(x) for x in v.split("."))
-    return f"{major}.{minor}.{patch + by}"
-
-
-def _closed_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    port = int(s.getsockname()[1])
-    s.close()
-    return port
+from .fake_release import CUR, INSTALLER, KEY, TRUSTED, FakeRelease, bump, closed_port
 
 
 @pytest.fixture
@@ -97,7 +32,7 @@ def upd(settings: Settings, rel: FakeRelease, tmp_path: Path) -> Updater:
     settings.update_feed_url = rel.feed
     settings.update_timeout_s = 2.0
     settings.ensure_dirs()
-    return Updater(settings, download_dir=tmp_path / "dl", platform="linux")
+    return Updater(settings, download_dir=tmp_path / "dl", platform="linux", trusted_keys=TRUSTED)
 
 
 def _code(fn: Any) -> str:
@@ -109,10 +44,10 @@ def _code(fn: Any) -> str:
 # ---- check: version comparison ----
 
 def test_newer_version_is_available(upd: Updater, rel: FakeRelease) -> None:
-    rel.publish(_bump(CUR, 1))
+    rel.publish(bump(CUR, 1))
     st = upd.check()
     assert st["state"] == "available" and st["current_version"] == CUR
-    assert st["latest"]["version"] == _bump(CUR, 1) and st["latest"]["notes"] == f"notes for {_bump(CUR, 1)}"
+    assert st["latest"]["version"] == bump(CUR, 1) and st["latest"]["notes"] == f"notes for {bump(CUR, 1)}"
 
 
 def test_same_version_is_up_to_date(upd: Updater, rel: FakeRelease) -> None:
@@ -130,7 +65,7 @@ def test_older_version_is_up_to_date_never_a_downgrade(upd: Updater, rel: FakeRe
 # ---- download + verification ----
 
 def test_download_verifies_sha256_and_is_ready(upd: Updater, rel: FakeRelease, tmp_path: Path) -> None:
-    v = _bump(CUR, 1)
+    v = bump(CUR, 1)
     rel.publish(v)
     upd.check()
     upd.start_download()
@@ -142,11 +77,11 @@ def test_download_verifies_sha256_and_is_ready(upd: Updater, rel: FakeRelease, t
     assert st["installer"] == str(exe)
     # a later check reuses the verified file instead of downloading again
     n = len(rel.hits)
-    assert upd.check()["state"] == "ready" and len(rel.hits) == n + 1
+    assert upd.check()["state"] == "ready" and len(rel.hits) == n + 2  # feed + signature only
 
 
 def test_bad_sha256_deletes_the_download(upd: Updater, rel: FakeRelease, tmp_path: Path) -> None:
-    rel.publish(_bump(CUR, 1), sha="0" * 64)
+    rel.publish(bump(CUR, 1), sha="0" * 64)
     upd.check()
     upd.start_download()
     upd.wait(10)
@@ -156,20 +91,22 @@ def test_bad_sha256_deletes_the_download(upd: Updater, rel: FakeRelease, tmp_pat
     assert _code(upd.install) == "update_not_ready"
 
 
-def test_download_http_error_is_reported(upd: Updater, rel: FakeRelease) -> None:
-    v = _bump(CUR, 1)
+@pytest.mark.parametrize(("status", "code"), [(404, "update_asset_missing"), (500, "update_http_error")])
+def test_download_http_error_is_reported(upd: Updater, rel: FakeRelease, status: int, code: str) -> None:
+    """A feed that names a newer version whose installer is not (yet) downloadable."""
+    v = bump(CUR, 1)
     rel.publish(v)
     upd.check()
-    del rel.routes[f"/owner/research-os/releases/download/v{v}/ResearchOS-Setup-{v}.exe"]
+    rel.routes[rel.asset_path(v)] = (status, b"nope", 0.0)
     upd.start_download()
     upd.wait(10)
-    assert upd.status()["error"]["code"] == "update_http_error"
+    assert upd.status()["error"]["code"] == code
 
 
 # ---- network failures ----
 
 def test_timeout(upd: Updater, rel: FakeRelease) -> None:
-    rel.publish(_bump(CUR, 1))
+    rel.publish(bump(CUR, 1))
     status, body, _ = rel.routes[rel.feed_path]
     rel.routes[rel.feed_path] = (status, body, 2.0)
     upd.s.update_timeout_s = 0.3
@@ -180,13 +117,15 @@ def test_timeout(upd: Updater, rel: FakeRelease) -> None:
 
 
 def test_network_error(upd: Updater) -> None:
-    upd.s.update_feed_url = f"http://127.0.0.1:{_closed_port()}/x/releases/latest/download/latest.json"
+    upd.s.update_feed_url = f"http://127.0.0.1:{closed_port()}/x/releases/latest/download/latest.json"
     assert _code(upd.check) == "update_network"
 
 
 def test_feed_http_error_and_bad_metadata(upd: Updater, rel: FakeRelease) -> None:
     assert _code(upd.check) == "update_http_error"  # nothing published: 404
     rel.routes[rel.feed_path] = (200, b"{not json", 0.0)
+    assert _code(upd.check) == "update_unsigned"  # the signature is checked before the bytes are parsed
+    rel.routes[rel.feed_path + ".sig"] = (200, sign(b"{not json", KEY).encode(), 0.0)
     assert _code(upd.check) == "update_bad_metadata"
 
 
@@ -194,11 +133,11 @@ def test_feed_http_error_and_bad_metadata(upd: Updater, rel: FakeRelease) -> Non
 
 def test_mirror_prefix_is_used_for_feed_and_installer(upd: Updater, rel: FakeRelease) -> None:
     """The origin is unreachable; everything goes through the mirror (https://ghfast.top/<url> style)."""
-    dead = f"http://127.0.0.1:{_closed_port()}"
-    v = _bump(CUR, 1)
+    dead = f"http://127.0.0.1:{closed_port()}"
+    v = bump(CUR, 1)
     rel.publish(v, host=dead)
     upd.s.update_feed_url = dead + rel.feed_path
-    assert _code(upd.check) == "update_network"
+    assert _code(upd.check) == "update_network"  # no mirror configured: a plain network error
     upd.set_mirror_prefix(rel.base + "/mirror/")
     assert upd.check()["state"] == "available"
     upd.start_download()
@@ -239,10 +178,12 @@ FEED = "https://github.com/o/r/releases/latest/download/latest.json"
     {"url": "https://github.com/o/r/releases/download/v9.9.9/other.exe"},
 ])
 def test_metadata_is_validated(kw: dict[str, str]) -> None:
+    raw = _meta(**kw)
     with pytest.raises(UpdateError) as e:
-        parse_release(_meta(**kw), FEED)
+        parse_release(raw, FEED, sign(raw, KEY).encode(), TRUSTED)
     assert e.value.code == "update_bad_metadata"
-    assert parse_release(_meta(), FEED).version == "9.9.9"
+    good = _meta()
+    assert parse_release(good, FEED, sign(good, KEY).encode(), TRUSTED).version == "9.9.9"
 
 
 # ---- install hand-off ----
@@ -261,10 +202,10 @@ def test_install_hands_over_to_the_hidden_helper(settings: Settings, rel: FakeRe
     settings.ensure_dirs()
     app = _installed_tree(tmp_path)
     u = Updater(settings, download_dir=tmp_path / "dl", platform="win32", app_root=app,
-                spawn=lambda cmd, env: calls.append((list(cmd), env)))
+                spawn=lambda cmd, env: calls.append((list(cmd), env)), trusted_keys=TRUSTED)
     assert install_dir(app) == tmp_path / "inst" and u.status()["can_install"]
     assert _code(u.install) == "update_not_ready"
-    v = _bump(CUR, 1)
+    v = bump(CUR, 1)
     rel.publish(v)
     u.check()
     u.start_download()
@@ -281,7 +222,7 @@ def test_install_hands_over_to_the_hidden_helper(settings: Settings, rel: FakeRe
 
 
 def test_install_unsupported_outside_a_windows_install(upd: Updater, rel: FakeRelease, tmp_path: Path) -> None:
-    rel.publish(_bump(CUR, 1))
+    rel.publish(bump(CUR, 1))
     upd.check()
     upd.start_download()
     upd.wait(10)
@@ -297,9 +238,9 @@ def test_http_api_and_no_check_at_startup(app: Any, client: Client, settings: Se
     c = client
     st = c.get("/api/v1/update").json()
     assert st["state"] == "idle" and st["latest"] is None and st["auto_check"] is False and rel.hits == []
-    app.state.updater = Updater(settings, download_dir=tmp_path / "dl", platform="linux")
+    app.state.updater = Updater(settings, download_dir=tmp_path / "dl", platform="linux", trusted_keys=TRUSTED)
     settings.update_feed_url = rel.feed
-    rel.publish(_bump(CUR, 1))
+    rel.publish(bump(CUR, 1))
     assert c.post("/api/v1/update/check").json()["state"] == "available"
     r = c.put("/api/v1/update/settings", json={"mirror_prefix": "nope"})
     assert r.status_code == 400 and r.json()["code"] == "update_bad_mirror"
@@ -307,7 +248,7 @@ def test_http_api_and_no_check_at_startup(app: Any, client: Client, settings: Se
     app.state.updater.wait(10)
     r = c.post("/api/v1/update/install")
     assert r.status_code == 409 and r.json()["code"] == "update_unsupported"
-    settings.update_feed_url = f"http://127.0.0.1:{_closed_port()}/x"
+    settings.update_feed_url = f"http://127.0.0.1:{closed_port()}/x"
     r = c.post("/api/v1/update/check")
     assert r.status_code == 502 and r.json()["code"] == "update_network" and r.json()["retryable"] is True
 

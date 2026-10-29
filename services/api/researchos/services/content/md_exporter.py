@@ -18,6 +18,8 @@ from ...contracts.exporters import (
     ReportSnapshot,
     Span,
 )
+from ...sdk.texts import LANGUAGE_OPTION, export_language
+from .texts import CORE
 
 
 class MarkdownExporter:
@@ -27,6 +29,7 @@ class MarkdownExporter:
         ("report", "answer", "manuscript"),
         ("text/markdown", "text/html"),
         "Markdown + HTML with resolved citations and verification-labelled numbers",
+        {"type": "object", "properties": dict(LANGUAGE_OPTION)},
     )
 
     def _span(self, s: Span, ctx: ExportContext, diags: list[Diagnostic], cited: list[str]) -> str:
@@ -84,25 +87,27 @@ class MarkdownExporter:
         return line
 
     def export(self, snapshot: ReportSnapshot, ctx: ExportContext, options: Mapping[str, Any]) -> ExportResult:
+        T = CORE.lang(export_language(options))
         diags: list[Diagnostic] = []
         cited: list[str] = []
         body = [f"# {snapshot.title}", ""] + [self._block(b, ctx, diags, cited) + "\n" for b in snapshot.blocks]
         if cited:
-            body.append("## References")
+            body.append(f"## {T('references')}")
             for k in cited:
                 e = ctx.citation(k)
                 if e is not None:
                     r = e.record
                     ids = ", ".join(f"{s}:{v}" for s, v in r.identifiers)
                     body.append(
-                        f"- [{k}] {', '.join(r.authors) or 'unknown authors'}. {r.title}."
+                        f"- [{k}] {', '.join(r.authors) or T('unknown_authors')}. {r.title}."
                         f"{' ' + r.venue + '.' if r.venue else ''}{' ' + str(r.year) + '.' if r.year else ''}"
-                        f"{' ' + ids if ids else ''} ({len(e.evidence)} evidence passage(s))"
+                        f"{' ' + ids if ids else ''} ({T('evidence_passages', n=len(e.evidence))})"
                     )
         md = "\n".join(body) + "\n"
         (ctx.out_dir / "report.md").write_text(md, encoding="utf-8")
         (ctx.out_dir / "report.html").write_text(
-            "<!doctype html><meta charset='utf-8'><title>" + html.escape(snapshot.title) + "</title>"
+            f"<!doctype html><html lang='{T.language}'><meta charset='utf-8'>"
+            f"<title>{html.escape(snapshot.title)}</title>"
             f"<pre style='font:14px/1.5 system-ui;white-space:pre-wrap'>{html.escape(md)}</pre>",
             encoding="utf-8",
         )

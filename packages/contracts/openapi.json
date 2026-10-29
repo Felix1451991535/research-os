@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "Research OS API",
-  "version": "0.1.3"
+  "version": "0.1.4"
  },
  "paths": {
   "/api/v1/health": {
@@ -5416,6 +5416,111 @@
     }
    }
   },
+  "/api/v1/library/identifications": {
+   "get": {
+    "tags": [
+     "library"
+    ],
+    "summary": "Identifications",
+    "operationId": "identifications_api_v1_library_identifications_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array",
+         "title": "Response Identifications Api V1 Library Identifications Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/library/identifications/{ident_id}/confirm": {
+   "post": {
+    "tags": [
+     "library"
+    ],
+    "summary": "Confirm Identification",
+    "operationId": "confirm_identification_api_v1_library_identifications__ident_id__confirm_post",
+    "parameters": [
+     {
+      "name": "ident_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ident Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Confirm Identification Api V1 Library Identifications  Ident Id  Confirm Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/library/identifications/{ident_id}/reject": {
+   "post": {
+    "tags": [
+     "library"
+    ],
+    "summary": "Reject Identification",
+    "operationId": "reject_identification_api_v1_library_identifications__ident_id__reject_post",
+    "parameters": [
+     {
+      "name": "ident_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ident Id"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/settings/file-roots": {
    "get": {
     "tags": [
@@ -6734,6 +6839,23 @@
     ],
     "summary": "Check",
     "operationId": "check_api_v1_update_check_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/FetchIn"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Data"
+       }
+      }
+     }
+    },
     "responses": {
      "200": {
       "description": "Successful Response",
@@ -6743,6 +6865,16 @@
          "additionalProperties": true,
          "type": "object",
          "title": "Response Check Api V1 Update Check Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
         }
        }
       }
@@ -6757,6 +6889,23 @@
     ],
     "summary": "Download",
     "operationId": "download_api_v1_update_download_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/FetchIn"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Data"
+       }
+      }
+     }
+    },
     "responses": {
      "202": {
       "description": "Successful Response",
@@ -6766,6 +6915,16 @@
          "additionalProperties": true,
          "type": "object",
          "title": "Response Download Api V1 Update Download Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
         }
        }
       }
@@ -6835,6 +6994,43 @@
         }
        }
       }
+     }
+    }
+   }
+  },
+  "/api/v1/update/whats-new/dismiss": {
+   "post": {
+    "tags": [
+     "update"
+    ],
+    "summary": "Dismiss Whats New",
+    "operationId": "dismiss_whats_new_api_v1_update_whats_new_dismiss_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Dismiss Whats New Api V1 Update Whats New Dismiss Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/diagnostics/bundle": {
+   "get": {
+    "tags": [
+     "diagnostics"
+    ],
+    "summary": "Bundle",
+    "operationId": "bundle_api_v1_diagnostics_bundle_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response"
      }
     }
    }
@@ -7164,6 +7360,15 @@
      "project_id": {
       "type": "string",
       "title": "Project Id"
+     },
+     "language": {
+      "type": "string",
+      "enum": [
+       "en",
+       "zh-CN"
+      ],
+      "title": "Language",
+      "default": "en"
      }
     },
     "type": "object",
@@ -7345,6 +7550,15 @@
        }
       ],
       "title": "Criteria"
+     },
+     "language": {
+      "type": "string",
+      "enum": [
+       "en",
+       "zh-CN"
+      ],
+      "title": "Language",
+      "default": "en"
      }
     },
     "type": "object",
@@ -7761,6 +7975,15 @@
         "type": "null"
        }
       ]
+     },
+     "language": {
+      "type": "string",
+      "enum": [
+       "en",
+       "zh-CN"
+      ],
+      "title": "Language",
+      "default": "en"
      }
     },
     "type": "object",
@@ -7768,6 +7991,17 @@
      "topic"
     ],
     "title": "FeasibilityIn"
+   },
+   "FetchIn": {
+    "properties": {
+     "direct": {
+      "type": "boolean",
+      "title": "Direct",
+      "default": false
+     }
+    },
+    "type": "object",
+    "title": "FetchIn"
    },
    "FxIn": {
     "properties": {

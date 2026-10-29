@@ -1,8 +1,8 @@
-"""Publish a release (ADR-225): tag v<v>, push the tag, `gh release create` with the exe, its .sha256 and latest.json.
-DRY RUN by default (preflight + the commands are printed, nothing runs); --yes executes them. Preflight: the three
-files exist, latest.json passes updater.parse_release, its version is the pyproject version, the exe and the .sha256
-file match its sha256, the worktree is clean and the tag does not exist yet. The repo comes from the default
-Settings.update_feed_url (gh --repo), notes from latest.json.
+"""Publish a release (ADR-225/228): tag v<v>, push the tag, `gh release create` with the exe, its .sha256, latest.json
+and latest.json.sig. DRY RUN by default (preflight + the commands are printed, nothing runs); --yes executes them.
+Preflight: the four files exist, latest.json + its signature pass update_feed.parse_release (embedded keys), its
+version is the pyproject version, the exe and the .sha256 file match its sha256, the worktree is clean and the tag
+does not exist yet. The repo comes from the default Settings.update_feed_url (gh --repo), notes from latest.json.
 
 Usage: python scripts/release/publish.py [--dir release] [--yes]"""
 
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from researchos import __version__
 from researchos.kernel.backup import file_sha256
-from researchos.services.ops.updater import Release, UpdateError, asset_name, parse_release
+from researchos.services.ops.update_feed import Release, UpdateError, asset_name, parse_release, signature_url
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import FEED_URL, RELEASE_DIR, ROOT, github_repo, run, sha256_line, show  # noqa: E402
@@ -23,11 +23,13 @@ from _common import FEED_URL, RELEASE_DIR, ROOT, github_repo, run, sha256_line, 
 
 def files(rel_dir: Path, version: str) -> list[Path]:
     exe = rel_dir / asset_name(version)
-    return [exe, exe.with_name(exe.name + ".sha256"), rel_dir / "latest.json"]
+    latest = rel_dir / "latest.json"
+    return [exe, exe.with_name(exe.name + ".sha256"), latest, Path(signature_url(str(latest)))]
 
 
 def load_feed(latest: Path) -> Release:
-    return parse_release(latest.read_bytes(), FEED_URL)
+    sig = Path(signature_url(str(latest)))
+    return parse_release(latest.read_bytes(), FEED_URL, sig.read_bytes() if sig.is_file() else None)
 
 
 def notes_of(latest: Path) -> str:
@@ -41,7 +43,7 @@ def file_problems(paths: list[Path], version: str) -> list[str]:
     missing = [f"missing {p}" for p in paths if not p.is_file()]
     if missing:
         return missing
-    exe, sha_file, latest = paths
+    exe, sha_file, latest, _sig = paths
     try:
         rel = load_feed(latest)
     except UpdateError as e:

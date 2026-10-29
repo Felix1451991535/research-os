@@ -1168,3 +1168,367 @@ Format: id — decision — reason — consequence. Changing a frozen core contr
   helper; the updater reuses `kernel.backup.file_sha256`. check.sh fails first when the venv drifts from uv.lock
   (`uv sync --inexact --extra dev --extra experiments --extra plugins --frozen --check`): the three pre-0.1.3 tpe
   sampler test failures were optuna missing from such a venv. Tests: `tests/test_release_scripts.py` (offline).
+
+## Open-source hygiene (M7.1; 2026-10-28)
+- **ADR-226** [public export in the repo] The public-export tooling moves from an external folder into
+  `scripts/public/` (maintainer-only; the directory is itself on the deny list, so the export never contains the deny
+  list, the scan patterns or their tests). `build_export.py <src> <dst>` copies `git ls-files`, drops the one deny list
+  `DELETE` (now incl. every `docs/*PLAN*.md` internal plan), applies the neutral `RULES` rewrites and adds the public
+  project files from `scripts/public/files/` (README en/zh-CN, CONTRIBUTING, SECURITY, LICENSE, .gitignore, issue
+  templates); rewrite rules that match nothing are printed as `WARN unused rewrite rule` so the list cannot silently
+  rot. `scan.py` scans a tree (git repo: tracked + untracked-not-ignored; other dirs: every file) or `--history`;
+  secrets are masked in its output. Generic patterns (secrets, relay host, e-mail, user paths, ip:port, internal
+  document markers incl. `V<n>_PLAN`) live in the repo; patterns that would themselves identify the owner (names, ids,
+  school, lab, acceptance-paper markers, private hosts) live only outside the repo in `$RESEARCHOS_LEAK_PATTERNS`
+  (default `~/.config/researchos/leak_patterns.json`); without that file only the generic patterns run and the gate
+  says so. check.sh runs the tooling tests and `scan.py --export-from .` (build into a temp dir + scan) and fails on any
+  hit. Tests: `scripts/public/tests/` (planted leak fails the gate, masked output, private patterns, allow list needs a
+  full match, history scan); they are run by check.sh, not by the exported pytest suite.
+- **ADR-227** [daily bug check] `scripts/public/daily_check.py` (beside the export tooling, so it is not exported)
+  runs check.sh on the current checkout (warns when that is not master; it never switches branches), rebuilds and
+  leak-scans the export, diffs it against the local public clone (= what the next sync would publish) and, only if
+  api.github.com is reachable, reads the public repo's open issues/PRs with one unauthenticated GET. Triage is a
+  label in the report only: `leak` (the leak scanner matches title/body; the title is withheld and the day FAILs),
+  `feature`, `bug repro` (a version and repro steps/diagnostics), else `needs info`. The dated report goes outside the
+  repo (`$RESEARCHOS_DAILY_DIR`, default `~/.local/share/researchos/daily/`; a path inside the repo is refused) and
+  lists leak locations without excerpts. It never pushes, comments, labels or closes. Offline the network section is
+  NOT RUN; tests use a local fake issues feed. Scheduling: cron line in OPS.md (no cron daemon on this box: NOT RUN).
+
+## Update hardening (M7.2; 2026-10-28)
+- **ADR-228** [authenticity of the update feed; extends ADR-223/225] The sha256 came from the same feed as the URL, so
+  whoever controls the release account could ship any exe. `latest.json` is now signed: the detached release asset
+  `latest.json.sig` holds one line `ed25519 <key id> <base64 signature>` over the exact feed bytes
+  (`services/ops/update_signing.py`; `cryptography` was already a dependency). The public halves of a release key and
+  of a backup key are compiled in (`TRUSTED_KEYS`, key id = first 16 hex of sha256(raw public key)); the private keys
+  were generated on the release box with `scripts/release/keygen.py` (refuses paths inside the repo, never
+  overwrites, mode 0600) under `~/.config/researchos/keys/` and are never committed; backing them up is an owner
+  action (M9). Rotation: embed the new public key in a release signed by a still-trusted key, then drop the old one
+  in a later release; a lost release key is replaced by the backup key the same way. Feed parsing, URL rules and the
+  error codes move from updater.py to `services/ops/update_feed.py`; `parse_release(raw, feed_url, signature,
+  trusted)` verifies before it parses, so an unsigned (`update_unsigned`) or badly signed (`update_bad_signature`)
+  feed is never offered. `manifest.py --key` signs, validates with the embedded keys and only then writes
+  `.sha256`, `latest.json`, `latest.json.sig` (optional `notes_zh` from `--notes-zh-file`); `publish.py` uploads the
+  signature and its preflight refuses an unsigned or tampered feed. New stable failure codes for the download:
+  `update_incomplete` (connection cut or fewer bytes than announced; retryable), `update_disk_full` (ENOSPC on the
+  `.part` file, HTTP 507), `update_write_failed`, `update_asset_missing` (the feed names a newer version whose
+  installer answers 404), `update_mirror_failed` (any failure through the mirror prefix; separate from
+  `update_bad_mirror`, which stays the validation error of the setting). A mirror failure is never retried by itself:
+  the page shows "Retry without the mirror", which sends `{"direct": true}` to `/update/check` or `/update/download`
+  for that one request; the saved prefix is unchanged. Two racing download clicks start one download (`update_busy`,
+  tested with a barrier). "What's new": `install()` stores the release's notes in `<data>/config/whats_new.json`;
+  `status.whats_new` returns them only while the running version equals theirs; the app shell shows them once in a
+  dialog (zh UI: `notes_zh` when present; notes are release data, not translated) and
+  `POST /update/whats-new/dismiss` deletes the file. `e2e_check.py` runs signed / unsigned / tampered-signature /
+  tampered-sha256 / mirror-down (+ retry without it) against the local fake release server with an ephemeral key;
+  the install step stays NOT RUN.
+- **ADR-229** [post-update health check; extends ADR-224] The updater passes `-Version` and `-HealthUrl` (its own
+  loopback `/api/v1/health`) to `apply_update.ps1`, which runs `setup.exe /S /RUNAFTER /KEEPPREV`; the new setup
+  switch leaves `app.prev` in place after a successful silent setup (any other run still removes it). The helper then
+  waits up to 120 s for health to report the new version: healthy -> `app.prev` removed; otherwise the reason is
+  logged to update.log, the new version is stopped, `app\` becomes `app.failed`, `app.prev` becomes `app\` again and
+  the previous version is started; the log names the migrator's pre-migration backup in data\backups for the case
+  that the new version already migrated the database (same limit as ADR-224). data\ is never touched. Static tests
+  only; makensis compiles the switch here; PSScriptAnalyzer and every Windows execution: NOT RUN (no pwsh on this
+  box).
+
+## Diagnostics bundle (M7.5; 2026-10-28)
+- **ADR-230** [one-click Windows feedback] Settings > About > "Export diagnostics" downloads
+  `GET /api/v1/diagnostics/bundle` (session required; built on demand, nothing stored or sent) =
+  `ResearchOS-diagnostics-<version>-<utc time>.zip` from `services/ops/diagnostics.py`. Only the allow-listed entries
+  can be written (`ALLOWED`; any other name raises): `logs/install.log` + `logs/install.prev.log` (the setup-made
+  install dir; UTF-16LE decoded), `logs/launcher.log`, `logs/update.log` (each the last 3000 lines of at most 4 MB),
+  `version.json`, `system.json` (OS, machine, Python, CPU count, memory, free disk, installed copy / TLS / dev mode;
+  no host or user name), `task_errors.json` (last 200 tasks with an error code or a failed / interrupted / blocked
+  state: id, kind, state, stage, attempt, code, message, time) and a README. api.log / worker.log and anything from
+  the library are deliberately not included. Every entry passes the existing log redaction (`kernel.logsetup.redact`:
+  key patterns + registered secrets), then this install's data / install / home paths (both separators, any case)
+  become `<data>` / `<install>` / `<home>`, the name in a user-profile path becomes `<user>` and e-mail addresses
+  `<email>`. The bug-report template names the button by its UI labels (test). Windows: NOT RUN.
+
+## Deep research follow-ups (M7.4; 2026-10-28)
+- **ADR-231** [stage compare-and-swap; extends ADR-106] Two `research.deep_advance` tasks for one run (trigger ticks,
+  retries, a second worker) could both run a stage (duplicate searches, imports, model calls) and both move it.
+  Core migration 0012 adds `advance_owner` / `advance_until` to `deep_research`: `deep.advance` first claims the run
+  with one conditional UPDATE (free or expired claim; lease 900 s, longer than a stage; a dead worker's claim
+  expires and the next tick continues); a concurrent advance gets no claim and returns the stage it found without
+  doing anything. Every stage change goes through `deep_store.move(frm, to)`, `UPDATE ... WHERE id=? AND stage=?`
+  (rowcount 1 or `StageConflict`), so even a late advance whose claim expired cannot move a stage twice; `save()`
+  refuses `stage` and only writes outputs. The claim is released in `finally` by its owner only; the claim columns
+  are not part of the API output. Tests: two threads with separate connections (one runs the stage, the other
+  returns at once; one event), CAS conflict, late advance, expired claim takeover.
+- **ADR-232** [K3 egress per literature source; reuses ADR-159/162] Literature sources are remote services, so what
+  they receive is egress like a model prompt. `discovery._run_source` (every search and citation-chaining call, incl.
+  deep research and library organisation) first passes exactly what the source would receive - query text and
+  filter values, or the chaining seed's title, identifiers and authors - through the central `egress.check` with the
+  caller's `Ctx.data_refs` (new, default empty): a local_only dataset declared there or detected by its fingerprints
+  blocks that source (`per_source` error `egress_blocked: ...`, event `gateway.egress_blocked` naming datasets and
+  source, never content; the source is not called; the other sources' results stand). Sources are remote unless they
+  declare `location = "local"` (read with getattr, the ADR-159 provider convention; additive, no contract change).
+  OA resolvers and retraction checks send only public identifiers of external works and are not gated.
+- **ADR-233** [title-based identification; library organisation matched by exact identifier only] Imported PDFs without
+  DOI / arXiv used to stay unidentified. Now library organisation reads a title guess from page 1
+  (`identify_title.title_guess`: the first of the first 15 lines with 4-40 words / 15-300 chars and no
+  journal/DOI/URL/copyright marker), searches it on the configured sources through `discovery.search` (so it is
+  logged and egress-gated, ADR-232) and stores up to 3 candidates with normalised title similarity >= 0.85
+  (difflib ratio on NFKD-casefolded word tokens) in `doc_identifications` (core migration 0013) as `suggested`.
+  The file is still planned into `_unsorted` and its document keeps its placeholder work: nothing is matched
+  silently. `GET /api/v1/library/identifications` lists open suggestions (the owner's review queue);
+  `POST .../{id}/confirm` links the stored document to the candidate's work (`upsert_work` + `attach_original`,
+  which re-links the same bytes) and rejects the other suggestions for that document in the same decision (event
+  `library.identified`); `POST .../{id}/reject` drops one; a second decision is 409 `already_decided`. Tests on
+  local reportlab fixture PDFs. Limit: the review-queue UI is not built yet (API only; M8 UI pass).
+
+## zh/en for generated documents (M7.3, first slice; 2026-10-28)
+- **ADR-234** [extends ADR-221 to the server] Fixed text in generated documents comes from one catalog per package,
+  rendered in a per-export `language` option (`en` default - the owner wants English academic slides - or `zh-CN`),
+  independent of the UI language. `researchos.sdk.texts` (plugin-facing, contracts-only like the rest of the SDK):
+  `Catalog({language: {code: text}})` refuses at build time a catalog whose languages differ in codes, have empty
+  texts or differ in `{placeholders}`; `export_language(options)`; `LANGUAGE_OPTION` for option schemas. Catalogs:
+  core `services/content/texts.py` (run report snapshot: title, summary, headings, metrics table header, figure
+  captions, provenance labels; Markdown exporter: references heading, unknown authors, evidence count) and
+  `report_export/texts.py` (slide kind labels, title-slide note and date format, slide section titles, references,
+  claim label; Word and LaTeX use the same catalog). `snapshot_from_run(..., language)` builds the run report in the
+  export language (ReportSnapshot.language `en` / `zh`); `publish()` validates `options.language` for every exporter
+  (422 `bad_language`); the plugins' option schemas accept it. Slide grouping also recognises common Chinese
+  manuscript headings (and a full-width colon). Not translated, as ADR-221: data, model output, protocol values
+  (ids, hashes, split names, verification labels, gate markers such as `[missing]`), proper nouns, Word style names.
+  The web adds a "Document language" select (English default) next to the run-slides and document export buttons.
+  `tests/test_backend_i18n_scan.py` (Python AST, the twin of the web scanner) fails on English passed to a document
+  sink (TextSpan, Word / slide text calls) or a Markdown heading literal in the template modules
+  (`TEMPLATE_MODULES`; `# i18n-exempt` for markers); scope grows package by package. Accept test: the same run
+  exported as Markdown and .pptx in both languages has identical numbers with their verification labels and passes
+  the number gate in both, and the zh export carries no English catalog heading. Still open (later slices): task
+  stage text, gate and diagnostics messages by code, methods-checklist labels, deep research report headings and
+  limitations boilerplate (a stored K8 doc), the remaining fixed API error messages, and the Playwright zh text scan.
+
+## Codex review of M7, findings #89-#95 (2026-10-28)
+- **ADR-235** [review #89; fixes ADR-230] The diagnostics bundle redacted `system.json` / `task_errors.json` after
+  `json.dumps`, which doubles backslashes and escapes quotes, so a Windows path (`D:\...\data\...`) or a secret
+  containing a quote no longer matched. `Redactor.tree()` now redacts every string (keys too) of the data before it
+  is serialised; log tails are plain text and stay redacted as text. Test: a backslash data path and a registered
+  secret with a quote in a task error come out as `<data>` / `[REDACTED]`.
+- **ADR-236** [review #90; fixes ADR-232] Citation chaining checked only the seed's title, identifiers and authors but
+  hands the whole `BibRecord` to the source (OpenAlex sends `source_id`; other plugins may use the abstract or URLs).
+  The egress check now sees every string of `asdict(record)` (`discovery._strings`, nested values included). Test:
+  a local_only sample id in any one of source_id / abstract / venue / url / oa_pdf_url / license / license_source /
+  kind blocks the source; the earlier "allowed" case had kept the id in the abstract and is corrected.
+- **ADR-237** [review #91; fixes ADR-226/227] Without the private pattern file the leak gate printed a note and could
+  pass, so a fresh checkout or a misconfigured cron never checked owner names or acceptance-paper markers. Now
+  `load_scanner()` raises `PrivatePatternsError` unless the file exists and holds a non-empty `patterns` object of
+  valid, non-empty regexes (`allow` an object); `scan.py` then exits 2 ("CANNOT RUN THE GATE"), and the daily check
+  adds a FAIL section `private leak patterns` (it still triages with the generic patterns). `--generic-only` is the
+  explicit non-gating mode (labelled "not a publication gate"; hits still exit 1). Tests: missing / bad JSON / empty /
+  invalid-regex files refuse the gate; generic-only is labelled; the daily report FAILs.
+- **ADR-238** [review #92; fixes ADR-226] The tree scan skipped any file that was not UTF-8 while the exporter copied
+  it, so a UTF-16 file with a secret passed. `scan.decode_text` decodes UTF-8, BOM-marked UTF-8/16/32 and BOM-less
+  UTF-16 (recognised by its NUL layout; NUL counts as binary otherwise, since it is valid UTF-8); a file that still
+  cannot be read is an `uninspectable` hit unless it matches `APPROVED_BINARY` (png/ico and the two plugins' fixture
+  archives / WFDB files, scanned by name only). Tests: a planted secret in utf-16 / -le / -be / utf-32 / utf-8-sig is
+  found; an unknown binary and a Latin-1 text file fail; approved binaries pass.
+- **ADR-239** [review #93; fixes ADR-231] The 900 s claim was never renewed and keyed by the actor, so a slow stage
+  could overlap its replacement, a stale `save()` could overwrite the winner's outputs before the final CAS, and a
+  retried task (same actor) could free the replacement's claim. Now `claim()` returns a unique token (`adv_...`,
+  stored in `advance_owner`); `save()`, `move()` and `renew()` require it (`WHERE advance_owner=<token>`; a takeover
+  raises `LeaseLost`, a subclass of `StageConflict`, so `advance` ends and returns the winner's stage) and every
+  write renews the lease; long stages also `renew()` before each search query, each chaining seed and each
+  sub-question's answer; `release()` frees only its own token. Side effects already done between two renewals by
+  a stale advance (a logged search run) are not undone: they are logged and idempotent at the candidate level. Tests:
+  new token per claim even for the same actor, stale save / move / renew refused and the winner's data intact,
+  renewal blocks a takeover, a stage that loses its lease mid-way ends without writing.
+- **ADR-240** [review #94; fixes ADR-233] Confirm checked the suggestion's status, then created the work and relinked
+  the document in separate commits, and only then recorded the decision, so two confirms of different candidates
+  could both succeed (two confirmed suggestions, the document linked to whichever finished last) and a reject could
+  race a confirm. Now the decision comes first in one `BEGIN IMMEDIATE` transaction (`identify_title._decide`):
+  status check, refusal while another suggestion of the document is confirmed, the update, and for a confirm the
+  rejection of the document's other open suggestions; the loser gets 409 `already_decided`. Only the winner then
+  creates the work and relinks; if that fails, the suggestions it decided are re-opened (`_undo`) and the error is
+  raised. Tests: two threads with separate connections (two confirms; confirm vs reject) - exactly one wins, the
+  document is linked to the winner's work; a failing link re-opens both suggestions.
+- **ADR-241** [review #95; fixes ADR-228] `latest.json` and `latest.json.sig` were read whole (`c.get`) before their
+  size limits applied, so a compromised mirror could exhaust memory before verification. Both are now streamed by
+  `updater._bounded(client, url, limit, code)`: an announced content-length above the limit is refused before
+  reading, and reading stops as soon as the received bytes pass it (feed: `MAX_FEED_BYTES`, `update_bad_metadata`;
+  signature: `MAX_SIG_BYTES`, `update_unsigned`, the code `verify` already gives an oversized signature); error
+  bodies are not read. The installer download was already streamed with `MAX_INSTALLER_BYTES`. Tests: oversized
+  feed / signature by content-length against the fake release server; an endless chunked body (httpx MockTransport)
+  is abandoned one chunk past the limit.
+
+## M7 completion (2026-10-28)
+- **ADR-242** [M7.2 failure paths end-to-end; extends ADR-225/228] `e2e_check.py` now also runs the download failure
+  paths against the local fake release server (a stdlib handler with per-scenario `Faults`): `truncated` (the
+  server announces the full installer, sends half and closes -> `update_incomplete`, nothing left), `asset-missing`
+  (signed feed, installer 404 -> `update_asset_missing`), `racing-clicks` (slow server, two clicks behind a barrier
+  -> one download, `update_busy`, then ready). Disk full on the `.part` file stays a unit test (it needs a patched
+  file write). The install step stays NOT RUN.
+- **ADR-243** [M7.3 slice 2: deep research report; extends ADR-234] The deep research report (a stored K8 `report`
+  doc) gets its fixed text - title, intro, PRISMA method lines, "insufficient material", trust line, contradiction
+  and sources headings, RETRACTED / metadata-only markers, limitations boilerplate - from the core catalog
+  (`content/texts.py`, codes `dr_*`; one catalog per package) in the run's `language` setting: `POST
+  /research/deep` accepts `language` (`en` default, `zh-CN`; 422 `bad_language` otherwise), stored in the run's
+  settings (part of the plan checkpoint hash, so it is approved with the plan); runs created earlier render in
+  English. Sub-questions, statements, titles, aspect/status values and recorded error text are data and stay as
+  written; `{{lit:...}}`, `{{cite:...}}` and `{{evidence:...}}` markers are identical in both languages. The
+  backend scanner covers `research/deep_report.py` and now also flags Markdown bullet / italic-paragraph literals.
+  Test: the end-to-end deep research run in en and zh-CN; the zh report has no English catalog text and passes the
+  final-mode gates (numbers, citations) like the en one. The web has no deep-research create form yet (API only).
+- **ADR-244** [M7.3 slice 3: fixed API error messages; extends ADR-221] Every literal message the API raises -
+  `ApiError(status, code, "text")`, `not_found("what")` (= "what not found") and `conflict(code, "text")` - must
+  have a row in the web's `i18n/apiErrors.ts` table: `tests/test_backend_i18n_scan.py` collects them from the
+  Python AST and fails with the file:line of any missing one (the vitest locale-parity test then forces both
+  translations). The scan found the 25 `not_found` subjects untranslated (projects, works, docs, runs, deep research
+  runs, ...); they are added in en + zh-CN. Dynamic messages (f-strings, details) stay as sent, as in ADR-221.
+- **ADR-245** [M7.3 slice 4: task stage codes; extends ADR-221] A task's `stage` is a code the host, the worker or a
+  plugin sets (`ctx.progress("parsing", ...)`), not display text. The web (`i18n/taskStages.ts` `stageLabel`, used by
+  the Tasks page) translates a known code under `taskStages.<code>` and shows any other stage (e.g. one a template
+  reports, `epoch_7`) as sent; the protocol is unchanged. `tests/test_backend_i18n_scan.py` collects every literal
+  first argument of `.progress(...)` in `services/api/researchos`, `workers` and `plugins` (plus the monitor's
+  default `running`) from the AST and fails if one is missing in either locale. Test: `taskStages.test.ts` (known
+  codes in en and zh-CN, unknown code raw).
+- **ADR-246** [M7.3 slice 5: cited cards; extends ADR-234] The fixed text of the paper card, the methods checklist
+  and the feasibility card - title prefix, field / tail / owner headings, "insufficient material" lines, the owner
+  placeholder, the missing-conditions lines, the feasibility dataset lines and status-table header - comes from the
+  core catalog (`card_<kind>_<key>`, `card_*`, `mc_*`, `fs_*`) in a per-request `language` (`CardIn.language`,
+  `FeasibilityIn.language`; `en` default, `zh-CN`; part of the idempotent request payload). `CardSpec` no longer
+  carries English headings: fields are `(key, question)`, tail sections and the owner section are keys, and
+  `CardSpec.heading(T, key)` looks the text up, so the catalog is the one source. A field's `cited` flag now comes
+  from whether a cited answer was inserted, not from the English prefix of the inserted text. Not translated:
+  questions (model prompts), answers (model output), dimension names / status values and the computed feasibility
+  reasons (recorded-fact messages; still English - open). The backend scanner covers cards.py, methods_checklist.py,
+  paper_card.py and feasibility.py. Tests: the methods checklist end to end in en and zh-CN (same cited item,
+  same gap order, no English catalog text in zh), the zh missing-conditions lines.
+- **ADR-247** [M7.3 slice 6: gate diagnostics by code; extends ADR-221] Gate / export diagnostics already carry
+  `{severity, code, message, ref}`. The web (`i18n/gateDiagnostics.ts`, used by the doc gate panel and the export
+  result) shows the server message as sent in English (it has the most detail) and, in another language, translates
+  a known code with its `ref` (`gateDiagnostics.<code>`) and the severity label; a code it does not know (e.g. a
+  plugin's own diagnostic) falls back to the server message. The protocol is unchanged. `test_backend_i18n_scan.py`
+  collects every literal code of the core gates (`gates.py`: `add(...)`, `Diagnostic(...)`, plus
+  `evidence_missing` / `evidence_stale` from the f-string) and fails if one is missing in either locale. Plugin
+  diagnostics (report_export, slides) are not in the table yet (raw fallback).
+- **ADR-248** [M7.3 slice 7: zh-CN text scan; extends ADR-221] The UI review tooling has a scan mode
+  (`scripts/ui_review.sh <out> --zh-text-scan`): it opens every page of the seeded instance in the zh-CN UI and lists
+  visible Latin-script words (text nodes outside code/pre, placeholder, aria-label, title) that are neither data -
+  a word seen in an API JSON response of that page (records, protocol values, model output) - nor in the
+  `PROPER_NOUNS` list (product names, formats, units; ADR-221 keeps proper nouns untranslated). It writes
+  `<out>/zh-text-scan.txt` and exits 1 if any word remains. It is a dev tool, not part of `check.sh` (needs Chrome
+  and a running instance). Its first run found the toast region and close-button aria labels in English (the
+  library defaults); `LocalizedToaster` now passes `common.notifications` / `common.close`.
+
+## Codex review of M7b, findings #96-#100 (2026-10-28)
+- **ADR-249** [review #96; fixes ADR-241] The update client followed redirects itself (`follow_redirects=True`), and
+  httpx reads every intermediate redirect body whole before returning the final response, so a redirect with an
+  endless body bypassed `_bounded`'s limit. The client no longer follows redirects; `updater._get(client, url)`
+  follows at most `MAX_REDIRECTS` (5) by hand, closing each redirect response unread, and more raise
+  `httpx.TooManyRedirects` (`update_network` / `update_mirror_failed` via `_mapped`). Feed, signature and installer
+  all go through it. Tests: two redirects with endless bodies give the final 200 body with nothing pulled from them;
+  six redirects end as `update_network`, nothing pulled.
+- **ADR-250** [review #97; fixes ADR-230/Review #89] The path redaction matched only the literal, `/` and `\` forms of
+  the data / install / home folders, so a Windows path whose backslashes were already escaped inside the text -
+  `str(FileNotFoundError(...))` quotes the file name with `repr`, which doubles them, and JSON text does the same -
+  reached the bundle unchanged. `Redactor` now builds one case-insensitive pattern per folder from its parts joined
+  by `[\\/]+` (any run of either separator), so the plain, forward-slash, once- and twice-escaped forms all become
+  `<label>`; the rest of the path keeps its separators. Tests: the four separator forms of one path; a real
+  `FileNotFoundError` string with the Windows form of the data folder in `task_errors` leaves no trace of it in the
+  bundle.
+- **ADR-251** [review #100; fixes ADR-240] A failed confirm re-opened every suggestion of the document whose
+  `decided_at` equalled its own, so a separate rejection taken in the same millisecond was re-opened too. Every
+  decision now has a unique id (`dec_...`, new column `doc_identifications.decision_id`, core migration 0014),
+  written on the decided suggestion and, for a confirm, on the open siblings it rejects; `_undo(decision_id)`
+  re-opens exactly those rows. Test: with a fixed clock, reject A, then confirm B with failing linking - B is open
+  again, A stays rejected.
+- **ADR-252** [review #99; fixes ADR-240] The confirm decision was committed before the document was linked, so a
+  process that ended in between left the suggestion confirmed and its siblings rejected while the document stayed
+  unidentified, and every retry got 409 (the exception-path `_undo` cannot run in a terminated process). A confirmed
+  suggestion is now final only once linked: new column `doc_identifications.linked_at` (core migration 0015), set
+  together with the `library.identified` event in one transaction after the linking. A confirmed suggestion with
+  `linked_at` NULL stays in the review queue (`pending` returns it with `status: confirmed`) and confirming it again
+  returns its existing decision and finishes the linking, whose writes are idempotent per suggestion
+  (`identify:<id>`, `identify:pdf:<id>`); reject still gets 409. The event is written once even if two retries
+  race, and `_undo` leaves a decision alone once its linking finished. The migration backfills `linked_at` from the
+  earliest `library.identified` event of the version; confirms stuck by this bug before the upgrade have none and
+  so become finishable. Test: decide a confirm, then on a fresh connection the suggestion is queued, confirm links
+  the document (siblings stay rejected), a further confirm is 409 and the event exists once.
+- **ADR-253** [review #98; fixes ADR-239] Importing consumed the import approval and then ran the whole (possibly
+  long, PDF-downloading) import without renewing its lease, so a replacement advance could take over, found the
+  approval consumed and stayed `awaiting_import_approval`, while the original's fenced `move()` dropped the imports
+  it had done. Now the approval is consumed and recorded in the run (`data.import_authorized`) in one transaction
+  (`consume_approval` joins the caller's transaction; `store.save(join=True)`, a lost lease rolls both back), and the
+  selection is imported one candidate at a time with a `renew()` before and a progress `save()` (`data.imported`)
+  after each. An advance that finds `import_authorized` skips the approval and imports only the candidates not yet
+  in `imported`; a candidate imported but not yet saved when the lease was lost is imported again idempotently
+  (`cand:<id>` work key, "reused"; its open-access PDF may be fetched again). Test: the lease expires during the
+  first candidate and a replacement advance takes over - it finishes the import to `reading` without a second
+  approval (one approval consumed, each candidate once), the original ends on its lost lease, and the run
+  completes.
+
+## Codex review of the M7b fixes, findings #101-#102 (2026-10-28)
+- **ADR-254** [review #101; fixes ADR-252] A confirm and its retry (ADR-252) share one decision, so when one of two
+  overlapping attempts failed before the other finished, its `_undo` re-opened the suggestion and its siblings, and
+  the other then set `linked_at` on a suggestion that was `suggested` again (open to a conflicting decision while
+  the document was linked). Every confirm now takes a new attempt id on the suggestion (`attempt_id`, core
+  migration 0016; a retry takes the linking over); `_undo(ident, attempt)` re-opens the decision only while that
+  attempt owns it and the linking has not finished. A successful linking ends in `_finish`: once, with the
+  `library.identified` event; if an attempt that owned the linking failed meanwhile and re-opened the suggestions,
+  the success takes the decision again (siblings rejected) since the document is linked, and gets 409 only if the
+  owner decided the document otherwise in between (the link then stays as made - not undone). Tests: two
+  threads, same suggestion - the first attempt fails while the retry is still linking (nothing re-opened, the
+  retry finishes), and the retry fails while the first is still linking (re-opened, then taken again by the
+  first); both end confirmed + linked, sibling rejected, one event.
+- **ADR-255** [review #102; fixes ADR-251/252] A confirm interrupted before core 0014 kept `decision_id` NULL;
+  0015 made it retryable, but a failed retry ran `_undo` on a NULL decision, which matched nothing: the suggestion
+  stayed confirmed, reject was 409 and no other candidate could be chosen while the linking kept failing. Core
+  migration 0017 gives each unfinished confirm without a decision id its own (`dec_legacy_<id>`), and the same id to
+  the rejected siblings of the same document with the same `decided_at` and `decided_by` (before 0014 a confirm
+  wrote one timestamp and actor on the suggestion and on the siblings it rejected); a rejection with another time
+  or actor was a separate decision and stays rejected. As a fallback, `_decide` gives a resumed confirm that still
+  has no decision id a new one (the suggestion alone can then be re-opened). Test: the pre-0014 state (confirmed +
+  same-decision sibling, plus an older independent rejection) upgraded with 0017, the resumed linking fails - both
+  of that decision are open again, the older rejection stays; then reject works and the other candidate can be
+  confirmed and linked.
+
+## M8 UI polish (2026-10-29)
+- **ADR-256** [M8 tooling; fixes ADR-248] The review tooling signed in and reloaded at once, but the query cache
+  (auth state included) is persisted to IndexedDB at most once a second and restored on reload within its 15 s
+  staleTime, so the first pages after sign-in reloaded into the signed-out state: the zh text scan reported the
+  sign-in screen as "clean" for them (ADR-248's 14 clean pages were partly that) and screenshots showed it. `login()`
+  now waits 1.5 s after sign-in, every scanned / captured page asserts the sign-in form is absent, and the scan pools
+  data words over every API response from sign-in on (a page restored from the cache fetches nothing itself) and
+  skips textarea content (JSON the user edits). New `--matrix` mode: every page in en and zh-CN at 1440x900,
+  1024x768 and 768x1024 (`<lang>-<view>-<page>[-full].png`) plus an overflow check - the page must not scroll sideways
+  and no visible element may extend past the viewport unless a scrolling / clipping ancestor holds it; it writes
+  `overflow.txt` and exits 1 on any overflow. Still a dev tool outside `check.sh` (needs Chrome + an instance).
+- **ADR-257** [M8 layout + labels; extends ADR-245] Found by the matrix and the fixed zh scan. (1) Between md and lg
+  (iPad portrait, 768) the sidebar is a 4.5 rem icon rail - labels stay for screen readers (`sr-only`) and as the
+  link title, the product name moves to the header - so the content gets 696 px instead of 552; lg and up keep the
+  full sidebar. (2) Key/value details (`JsonDetails`) use `minmax(6rem,12rem)` label columns (`5rem..10rem` when
+  nested) and a `minmax(0,1fr)` value column with `overflow-wrap: anywhere`, and the plan's content hash wraps, so
+  hashes and ids no longer push the plan page sideways at 768. (3) `PageHeader` drops its bottom margin inside a grid
+  parent (the gap was doubled on the plan, run, study and literature pages). (4) `codeLabel(group, code)` (the ADR-245
+  helper, generalised) translates document kinds (`docKinds`; project page, document editor) and answer sentence
+  kinds (`sentenceKinds`; research page) with a raw fallback; `test_backend_i18n_scan.py` keeps every core doc kind
+  and every `qa_validate.KINDS` value in both locales. (5) Format examples that must be typed as they are - the gap
+  map axes and the venue tier JSON - are shown as `<code>` after a translated explanation instead of as the whole
+  zh hint. Tests: `taskStages.test.ts` (doc / sentence kinds in zh, unknown raw), the backend scan test.
+
+## Codex review of the #101-#102 fixes, findings #103-#104 (2026-10-29)
+- **ADR-258** [review #103; fixes ADR-254] The ownership check (`_finish`) ran after the relink: attempt A paused
+  before attaching, its retry failed and re-opened the suggestions, the owner confirmed candidate B (linked), and A
+  then moved the document to A's work (and, its work emptied, deleted B's work and moved its identifiers) before
+  `_finish` answered 409 - B confirmed with its event while the document pointed to A. `DbKnowledgeWriter.
+  attach_original` takes an optional `guard` (host only, not in the plugin contract) that runs first inside the
+  relink transaction; `confirm` passes `_finish` (now `tx(join=True)`), so the decision check, `linked_at`, the
+  `library.identified` event and the relink commit together or not at all - a 409 leaves B's link untouched. The
+  `_finish` after the attach stays for a linking replayed (idempotency key) from before this fix; it is a no-op once
+  linked. The work A's `upsert_work` created may stay without a document (as on any failed link). Test: that
+  interleaving with threads - A gets 409, the document stays on B's work, B confirmed + linked, A's suggestion
+  rejected, one event.
+- **ADR-259** [review #104; fixes ADR-255] Core 0017 gave a legacy unfinished confirm's decision id also to every
+  rejection of the document with the same `decided_at` and `decided_by`, but a separate rejection by the same actor
+  in the same millisecond looks exactly like a sibling the confirm rejected, so a failed retry could re-open a
+  rejection the owner made on purpose. Before 0014 nothing recorded which rejections a confirm made (no event, no
+  id), so there is no reliable provenance: 0017 now gives the decision id to the unfinished confirm only and leaves
+  every legacy rejection rejected. A failed resumed linking re-opens just the confirmed suggestion (reject then
+  works, as in ADR-255); its former siblings stay rejected, so such a document's other candidates are not offered
+  again (it stays unidentified in `_unsorted`). 0017 is changed in place: 0014-0017 were added after the last
+  installer build (0.1.3, 2026-10-28 01:40) and never shipped. Test: the pre-0014 state with the sibling and an
+  independent rejection at the same timestamp and actor - after 0017 only the confirm has a decision id; the failed
+  resumed linking re-opens only it; both rejections stay rejected (confirming them is 409).

@@ -155,17 +155,54 @@ def test_224_update_keeps_the_previous_app_until_complete_and_restores_it_on_fai
     assert fail.index('Rename "$INSTDIR\\app.prev"') < fail.index("Abort")
     last_fail = max(i for i, ln in enumerate(main) if "!insertmacro FAIL" in ln)
     cleanup = main.index('RMDir /r "$INSTDIR\\app.prev"', move + 1)
-    assert cleanup > last_fail and main[cleanup - 1] == 'StrCpy $Rollback "0"'
+    done = main.index('StrCpy $Rollback "0"', move + 1)
+    assert last_fail < done < cleanup
     assert 'RMDir /r "$INSTDIR\\app.prev"' in _section("Uninstall")
+
+
+def test_228_keepprev_leaves_app_prev_only_for_a_silent_update() -> None:
+    """ADR-228: `/S /KEEPPREV` keeps app.prev for apply_update.ps1's health check; any other run removes it."""
+    main = [ln.strip() for ln in _code(_section("Research OS")) if ln.strip()]
+    i = main.index('${GetOptions} $1 "/KEEPPREV" $2')
+    assert main[i - 2:i] == ["${GetParameters} $1", "ClearErrors"]
+    assert main[i + 1:i + 5] == ["${If} ${Errors}", "${OrIfNot} ${Silent}", 'RMDir /r "$INSTDIR\\app.prev"', "${EndIf}"]
 
 
 def test_224_silent_update_restarts_the_app_only_with_runafter() -> None:
     main = [ln.strip() for ln in _code(_section("Research OS")) if ln.strip()]
     i = main.index('${GetOptions} $1 "/RUNAFTER" $2')
-    assert main[i - 2] == "${GetParameters} $1" and main[i - 1] == "ClearErrors"
+    assert main.index("${GetParameters} $1") < i and main[i - 1] == "ClearErrors"
     assert main[i + 1:i + 4] == ["${If} ${Silent}", "${AndIfNot} ${Errors}", "Call LaunchApp"]
     assert main.index('!insertmacro LOG "setup finished OK"') < i
     assert '!include "FileFunc.nsh"' in NSI
     # every message box answers itself in silent mode
     boxes = [ln for ln in _code(NSI) if "MessageBox" in ln]
     assert boxes and all("/SD " in ln for ln in boxes)
+
+
+PS1 = (ROOT / "scripts" / "apply_update.ps1").read_text(encoding="utf-8")
+
+
+def _body(fn: str) -> str:
+    start = PS1.index(f"function {fn}")
+    return PS1[start:PS1.index("\n}\n", start)]
+
+
+def test_228_apply_update_waits_for_the_new_version_then_drops_app_prev() -> None:
+    main = PS1[PS1.index("try {\n  Write-Log \"update to"):]
+    setup = main.index("'/S', '/RUNAFTER', '/KEEPPREV'")
+    healthy = main.index("$problem = Wait-Healthy")
+    assert setup < main.index("if ($p.ExitCode -ne 0) { Start-Previous; exit $p.ExitCode }") < healthy
+    undo = main.index("if ($problem) { Undo-Update $problem; exit 2 }")
+    assert healthy < undo < main.index("Remove-Item -Recurse -Force $Prev")
+    assert "$seen -eq $Version" in _body("Wait-Healthy") and "$HealthTimeoutSec" in _body("Wait-Healthy")
+    assert "Invoke-RestMethod -Uri $HealthUrl" in _body("Get-RunningVersion")
+
+
+def test_228_rollback_after_a_failed_health_check_restores_app_prev() -> None:
+    undo = _body("Undo-Update")
+    order = ["Write-Log \"health check failed: $reason", "if (-not (Test-Path $Prev))", "Stop-App",
+             "Rename-Item -Path $App -NewName 'app.failed'", "Rename-Item -Path $Prev -NewName 'app'", "Start-Previous"]
+    assert [undo.index(x) for x in order] == sorted(undo.index(x) for x in order)
+    assert "data\\backups" in undo  # a migrated database: the migrator's backup is named in the log
+    assert not re.search(r"Remove-Item[^\n]*\$DataDir", PS1)  # data\ is never touched

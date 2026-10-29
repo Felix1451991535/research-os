@@ -4,8 +4,8 @@ The real-data test runs only where EEGMMIDB_DATA_DIR points to a local subset; i
 from __future__ import annotations
 
 import hashlib
-import tempfile
 import os
+import tempfile
 from pathlib import Path
 
 import numpy as np

@@ -6,7 +6,8 @@
 ; Desktop + Start Menu shortcuts (hidden launcher), an uninstaller and an Add/Remove Programs entry.
 ; data\ is never touched by setup or updates; the uninstaller asks before deleting it (default: keep).
 ; Silent mode (ADR-224): `/S` installs or updates without any page or message box; `/RUNAFTER` (with /S) starts
-; Research OS after a successful setup (used by the in-app updater). An update keeps the previous app\ as app.prev
+; Research OS after a successful setup (used by the in-app updater); `/KEEPPREV` (with /S) leaves app.prev for the
+; updater's health check (ADR-228). An update keeps the previous app\ as app.prev
 ; until the new version is complete and restores it on any failure (the current install stays usable).
 ; Windows execution: NOT RUN on the dev box (Linux) - compiled only.
 
@@ -246,12 +247,18 @@ Section "Research OS" SecMain
   WriteRegStr HKCU "${UNINSTKEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKCU "${UNINSTKEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTKEY}" "NoRepair" 1
-  ; complete: the previous version is no longer needed
+  ; complete: the previous version is no longer needed, unless the in-app updater keeps it for its post-update
+  ; health check (/S /KEEPPREV, ADR-228: apply_update.ps1 removes it once the new version answers, or rolls back)
   StrCpy $Rollback "0"
-  RMDir /r "$INSTDIR\app.prev"
+  ${GetParameters} $1
+  ClearErrors
+  ${GetOptions} $1 "/KEEPPREV" $2
+  ${If} ${Errors}
+  ${OrIfNot} ${Silent}
+    RMDir /r "$INSTDIR\app.prev"
+  ${EndIf}
   !insertmacro LOG "setup finished OK"
   ; silent update from the app (ADR-224): start Research OS again
-  ${GetParameters} $1
   ClearErrors
   ${GetOptions} $1 "/RUNAFTER" $2
   ${If} ${Silent}

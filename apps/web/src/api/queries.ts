@@ -118,11 +118,13 @@ export const useUpdateStatus = () => useQuery({
   refetchInterval: (q) => (q.state.data?.state === "downloading" || q.state.data?.state === "installing" ? 1000 : false),
 });
 export const updateCalls = {
-  check: (key: string) => api.post<UpdateStatus>("/update/check", {}, { idempotencyKey: key }),
-  download: (key: string) => api.post<UpdateStatus>("/update/download", {}, { idempotencyKey: key }),
+  // direct: the owner's "retry without the mirror" click (ADR-228); never automatic
+  check: (key: string, direct = false) => api.post<UpdateStatus>("/update/check", { direct }, { idempotencyKey: key }),
+  download: (key: string, direct = false) => api.post<UpdateStatus>("/update/download", { direct }, { idempotencyKey: key }),
   install: (key: string) => api.post<UpdateStatus>("/update/install", {}, { idempotencyKey: key }),
   setMirror: (prefix: string, key: string) =>
     api.put<UpdateStatus>("/update/settings", { mirror_prefix: prefix }, { idempotencyKey: key }),
+  dismissWhatsNew: (key: string) => api.post<UpdateStatus>("/update/whats-new/dismiss", {}, { idempotencyKey: key }),
 };
 
 // Experiments and studies extend the same query/client layer. Irreversible execution is online-only;

@@ -68,7 +68,7 @@ export function ResearchPlanning({ pid }: { pid: string }) {
       {feas.error && <ErrorState error={feas.error} />}
       {feasOut && <FeasibilityResult pid={pid} out={feasOut} />}
       <form className="grid gap-2" onSubmit={e => { e.preventDefault(); gaps.mutate(); }}>
-        <Field label={t("planning.axes")} htmlFor="gap-axes" hint={t("planning.axesHint")}><Textarea id="gap-axes" value={axes} onChange={e => setAxes(e.target.value)} /></Field>
+        <Field label={t("planning.axes")} htmlFor="gap-axes" hint={<>{t("planning.axesHint")} <code>{t("planning.axesExample")}</code></>}><Textarea id="gap-axes" value={axes} onChange={e => setAxes(e.target.value)} /></Field>
         <Button type="submit" size="touch" disabled={gaps.isPending || !axes.trim()}>{t("planning.map")}</Button>
       </form>
       {gaps.error && <ErrorState error={gaps.error} />}

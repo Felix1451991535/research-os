@@ -1,0 +1,46 @@
+name: Bug report / 问题报告
+description: Something does not work as described. / 功能与说明不符。
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      description: Settings → About shows it (e.g. 0.2.0). / 在 设置 → 关于 中查看。
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform / 平台
+      options: ["Windows (installer)", "Windows (from source)", "Linux", "macOS", "iPad (browser)", "Other"]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result / 预期与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics bundle / 诊断包
+      description: >-
+        Settings → About → "Export diagnostics" saves a zip (logs, version, OS info, recent task errors; keys, paths
+        and e-mail addresses are redacted). Please check it and attach it here. /
+        设置 → 关于 → "导出诊断信息" 会生成一个 zip(日志、版本、系统信息、最近的任务错误;密钥、路径和邮箱已脱敏),检查后附在这里。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy / 隐私
+      options:
+        - label: I removed personal data, API keys and patient data from this report. / 我已删除个人数据、API 密钥和患者数据。
+          required: true

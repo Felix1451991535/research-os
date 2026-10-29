@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 from functools import partial
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
@@ -166,6 +166,7 @@ def decide(sid: str, data: DecisionIn, request: Request, p: Principal = Depends(
 
 class CardIn(BaseModel):
     project_id: str
+    language: Literal["en", "zh-CN"] = "en"  # fixed text of the card doc (ADR-246); answers stay as written
 
 
 def _card(request: Request, conn: sqlite3.Connection, kind: str, project_id: str, payload: dict[str, Any],
@@ -184,7 +185,7 @@ def _work_card(request: Request, conn: sqlite3.Connection, p: Principal, module:
     svc = services(request)
     return _card(request, conn, module.SPEC.kind, data.project_id, {"work_id": work_id, **data.model_dump()},
                  partial(module.create, conn, svc.gateway, svc.doc_kinds, work_id=work_id,
-                         project_id=data.project_id, actor=p.actor))
+                         project_id=data.project_id, actor=p.actor, language=data.language))
 
 
 @router.post("/works/{work_id}/card", status_code=201)
@@ -213,6 +214,7 @@ class FeasibilityIn(BaseModel):
     runs_planned: int | None = Field(default=None, ge=1, le=100000)
     deadline_days: int | None = Field(default=None, ge=1, le=3650)
     reference_plan: PlanRef | None = None  # comparable workload for the time estimate (review #68)
+    language: Literal["en", "zh-CN"] = "en"  # fixed text of the card doc (ADR-246)
 
 
 @router.post("/projects/{project_id}/feasibility", status_code=201)
@@ -222,4 +224,4 @@ def feasibility_create(project_id: str, data: FeasibilityIn, request: Request, p
     svc = services(request)
     return _card(request, conn, "feasibility", project_id, {"project_id": project_id, **data.model_dump()},
                  partial(feasibility.create, conn, svc.gateway, svc.doc_kinds, svc.templates, gpu_info,
-                         data.model_dump(), project_id=project_id, actor=p.actor))
+                         data.model_dump(), project_id=project_id, actor=p.actor, language=data.language))

@@ -4,6 +4,7 @@ import { CheckCircle2, ListChecks, Play, RotateCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
+import { stageLabel } from "@/i18n/taskStages";
 import { describeError } from "@/api/client";
 import { useApprove, useCreateTask, useHost, useTaskAction, useTasks } from "@/api/queries";
 import type { Task } from "@/api/types";
@@ -18,8 +19,9 @@ import { newKey, relativeTime } from "@/lib/utils";
 function stageText(t: Task): string {
   if (t.state === "running" || t.state === "cancelling") {
     const p = t.progress as { elapsed_s?: number; total_s?: number };
-    if (t.stage && p.elapsed_s !== undefined) return i18n.t("tasks.elapsed", { stage: t.stage, seconds: p.elapsed_s });
-    return t.stage ?? i18n.t("tasks.started");
+    const stage = t.stage ? stageLabel(t.stage) : null;
+    if (stage && p.elapsed_s !== undefined) return i18n.t("tasks.elapsed", { stage, seconds: p.elapsed_s });
+    return stage ?? i18n.t("tasks.started");
   }
   if (t.error_code) return `${t.error_code}${t.error_message ? `: ${t.error_message}` : ""}`;
   return "";

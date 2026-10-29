@@ -15,7 +15,7 @@ from ...contracts.errors import ApiError
 from ...contracts.http import HttpDenied, HttpUnavailable
 from ...contracts.importers import FileImportRequest
 from ...services import plugin_settings
-from ...services.content.export_host import export_download, publish, run_project, snapshot_from_run
+from ...services.content.export_host import export_download, language_of, publish, run_project, snapshot_from_run
 from ...services.identity.sessions import Principal
 from ...services.knowledge import imports
 from ...services.knowledge.http_fetch import HostHttp
@@ -129,7 +129,7 @@ def export(
     exp = svc.extensions.exporters.get(exporter)
     if exp is None:
         raise ApiError(404, "unknown_exporter", f"no exporter {exporter!r}")
-    snap = snapshot_from_run(conn, svc.settings.data_dir, data.run_id)
+    snap = snapshot_from_run(conn, svc.settings.data_dir, data.run_id, language_of(data.options))
     return publish(conn, svc.settings.data_dir, exp, snap, data.mode, data.options, p.actor,  # type: ignore[arg-type]
                    project_id=run_project(conn, data.run_id))
 

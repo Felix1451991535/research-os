@@ -60,7 +60,7 @@ it.each(["Slides", "Slides draft"])("exports %s and retains overflow diagnostics
   const p = await renderPage(<DocEditorPage />, "/:id/:docId", "/p/d");
   try {
     await p.click(button);
-    expect(post).toHaveBeenCalledWith("/docs/d/export", { exporter: "report_slides", mode: button === "Slides" ? "final" : "draft" }, expect.objectContaining({ idempotencyKey: expect.any(String) }));
+    expect(post).toHaveBeenCalledWith("/docs/d/export", { exporter: "report_slides", mode: button === "Slides" ? "final" : "draft", options: { language: "en" } }, expect.objectContaining({ idempotencyKey: expect.any(String) }));
     expect(p.host.textContent).toContain("slide_overflow"); expect(p.host.textContent).toContain("Content split across slides");
     expect(p.host.textContent).toContain("slides.html");
   } finally { await p.dispose(); }

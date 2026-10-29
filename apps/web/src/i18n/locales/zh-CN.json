@@ -7,6 +7,7 @@
     "description": "本设备的界面语言。数据、模型输出以及没有译文的服务器消息按原文显示。"
   },
   "common": {
+    "notifications": "通知",
     "cancel": "取消",
     "save": "保存",
     "close": "关闭",
@@ -77,6 +78,31 @@
     "notComparableWindows": "两次运行的预测覆盖了不同的窗口或标签",
     "notEligible": "全文筛选前须先在标题/摘要阶段纳入",
     "approvalNotFound": "未找到该批准记录",
+    "answerNotFound": "未找到该答案",
+    "canaryNotFound": "未找到该金丝雀检查",
+    "candidateNotFound": "未找到该候选文献",
+    "citekeyNotFound": "未找到该引用键",
+    "contradictionNotFound": "未找到该矛盾记录",
+    "datasetNotFound": "未找到该数据集",
+    "decisionNotFound": "未找到该决策记录",
+    "deepResearchNotFound": "未找到该深度调研运行",
+    "docNotFound": "未找到该文档",
+    "documentNotFound": "未找到该文献文件",
+    "effectPlanNotFound": "未找到该操作计划",
+    "exportFileNotFound": "未找到该导出文件",
+    "figureNotFound": "未找到该图",
+    "identificationNotFound": "未找到该识别建议",
+    "pageNotFoundGeneric": "未找到该页面",
+    "planNotFound": "未找到该计划",
+    "planRevisionNotFound": "未找到该计划版本",
+    "projectNotFound": "未找到该项目",
+    "reviewNotFound": "未找到该综述",
+    "runNotFound": "未找到该运行",
+    "savedSearchNotFound": "未找到该保存的检索",
+    "searchRunNotFound": "未找到该检索运行",
+    "studyNotFound": "未找到该研究",
+    "suggestionNotFound": "未找到该建议",
+    "workNotFound": "未找到该文献",
     "deviceNotFound": "未找到该设备",
     "taskNotFound": "未找到该任务",
     "unknownCandidate": "所选内容中有未知的候选 ID",
@@ -106,7 +132,8 @@
     "lengthRequired": "需要 Content-Length",
     "badContentLength": "Content-Length 无效",
     "idempotencyKeyMissing": "需要 Idempotency-Key 请求头",
-    "idempotencyMismatchTask": "Idempotency-Key 被用于另一个任务"
+    "idempotencyMismatchTask": "Idempotency-Key 被用于另一个任务",
+    "identificationDecided": "该建议已被确认或拒绝。"
   },
   "app": {
     "notFoundTitle": "页面不存在",
@@ -169,7 +196,8 @@
     "blocked": "已阻止"
   },
   "export": {
-    "resultTitle": "导出结果"
+    "resultTitle": "导出结果",
+    "languageLabel": "文档语言"
   },
   "auth": {
     "desktopBrowser": "桌面浏览器",
@@ -367,7 +395,8 @@
     "tierSource": "分级来源",
     "tierYear": "分级年份",
     "tierEntries": "分级条目(JSON)",
-    "tierEntriesHint": "示例:[{\"venue\":\"期刊名称\",\"tier\":\"Q1\"}]",
+    "tierEntriesHint": "示例:",
+    "tierEntriesExample": "[{\"venue\":\"期刊名称\",\"tier\":\"Q1\"}]",
     "replaceButton": "替换期刊分级",
     "updating": "正在更新证据标签…"
   },
@@ -401,6 +430,51 @@
     "workerDown": "工作进程未运行:排队的任务会一直等待,“运行中”的任务没有进展。请用 start.ps1 启动它。",
     "emptyTitle": "还没有任务",
     "emptyBody": "导入和实验会在这里显示真实状态。"
+  },
+  "gateDiagnostics": {
+    "severity": {
+      "error": "错误",
+      "warning": "警告"
+    },
+    "unresolved_citation": "引用键 {{ref}} 不在文献库中",
+    "retracted_citation": "{{ref}} 引用了已撤稿的工作",
+    "unresolved_metric": "没有已存储的指标 {{ref}}",
+    "metric_failed": "{{ref}} 复算未通过",
+    "metric_unverified": "{{ref}} 未经复算验证",
+    "evidence_missing": "证据 {{ref}} 不存在",
+    "evidence_stale": "证据 {{ref}}：引文验证后来源已变化",
+    "evidence_failed": "证据 {{ref}} 的可信度为 failed（例如来源已撤稿）",
+    "evidence_superseded": "证据 {{ref}} 位于较旧的版本上",
+    "malformed_placeholder": "无法识别的占位符",
+    "free_number": "数字 {{ref}} 没有来源：请使用指标、引用其引文包含该数字的证据，或标记为字面值",
+    "missing_artifact": "未找到图产物 {{ref}}"
+  },
+  "taskStages": {
+    "parsing": "解析中",
+    "sleeping": "等待中",
+    "running": "运行中",
+    "records": "读取记录",
+    "read": "读取文件",
+    "subjects": "读取受试者",
+    "windows": "切分窗口",
+    "features": "计算特征",
+    "fit": "拟合模型",
+    "done": "收尾中",
+    "cancelled": "已取消"
+  },
+  "docKinds": {
+    "note": "笔记",
+    "report": "报告",
+    "manuscript": "稿件",
+    "paper_card": "论文卡片",
+    "methods_checklist": "方法核查清单",
+    "feasibility": "可行性检查"
+  },
+  "sentenceKinds": {
+    "source_fact": "原文事实",
+    "author_conclusion": "作者结论",
+    "model_inference": "模型推断",
+    "hypothesis": "假设"
   },
   "literature": {
     "title": "文献检索",
@@ -707,7 +781,8 @@
     "noneSelected": "未选择",
     "check": "检查可行性",
     "axes": "空白图的轴(一到两行)",
-    "axesHint": "paradigm: motor imagery, sleep staging | sleep scoring",
+    "axesHint": "每行一个轴,写作「轴名: 词, 词」,| 分隔同义写法。词按论断原文匹配(原文是英文就写英文),例如",
+    "axesExample": "paradigm: motor imagery, sleep staging | sleep scoring",
     "map": "绘制证据空白图",
     "openDoc": "打开可行性文档",
     "gapIntro": "{{count}} 条已验证论断;“空白”表示本文献库中没有已验证论断,并不代表文献中不存在。",
@@ -736,7 +811,7 @@
     "progressAria": "下载进度",
     "installingHint": "Research OS 将关闭、静默安装更新后自动重新启动。你的数据会保留；如安装失败，将恢复当前版本。",
     "readyManual": "安装包已下载并通过校验。自动安装仅适用于 Windows 安装版，请手动运行此文件：",
-    "noAutoCheck": "不会自动检查。安装前会先校验安装包的 sha256。",
+    "noAutoCheck": "不会自动检查。发布信息必须带有效签名，安装包的 sha256 在安装前校验。",
     "mirrorLabel": "下载镜像（可选）",
     "mirrorHint": "加在 GitHub 链接前的地址前缀，例如 https://ghfast.top/。留空表示直连。",
     "mirrorPlaceholder": "https://ghfast.top/",
@@ -752,7 +827,21 @@
       "update_busy": "已有下载正在进行。",
       "update_not_ready": "请先下载并校验更新。",
       "update_unsupported": "自动安装仅适用于 Windows 安装版。请手动运行已下载的安装包。",
-      "update_launch_failed": "无法启动安装程序。当前版本未改动。"
-    }
+      "update_launch_failed": "无法启动安装程序。当前版本未改动。",
+      "update_unsigned": "发布信息未签名，已拒绝；未下载或更改任何内容。",
+      "update_bad_signature": "发布信息的签名无效，已拒绝；未下载或更改任何内容。",
+      "update_incomplete": "下载未完成就中断了，已删除。未更改任何内容，请重试。",
+      "update_disk_full": "磁盘空间不足，无法保存更新。请清理空间后重试。未更改任何内容。",
+      "update_write_failed": "无法保存更新下载。未更改任何内容。",
+      "update_asset_missing": "新版本暂未提供安装包下载，请稍后再试。",
+      "update_mirror_failed": "下载镜像不可用。请不使用镜像重试，或更换镜像。"
+    },
+    "retryDirect": "不使用镜像重试",
+    "whatsNewTitle": "{{version}} 更新内容",
+    "whatsNewEmpty": "此版本没有更新说明。",
+    "whatsNewOk": "知道了",
+    "diagnosticsTitle": "诊断信息",
+    "diagnosticsHint": "保存一个 zip，包含安装、启动和更新日志、版本、系统信息和最近的任务错误，用于提交问题报告。API 密钥、文件夹路径、用户名和邮箱地址已移除；不包含你的文档和笔记。不会自动发送：请检查文件后自行附上。",
+    "diagnosticsExport": "导出诊断信息"
   }
 }

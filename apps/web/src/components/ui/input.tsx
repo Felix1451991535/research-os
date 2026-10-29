@@ -22,7 +22,7 @@ export function Label({ className, ...p }: React.ComponentProps<typeof LabelPrim
 
 /** Label + control + optional hint/error, consistently spaced. */
 export function Field({ label, htmlFor, hint, error, children }: {
-  label: string; htmlFor: string; hint?: string; error?: string | null; children: React.ReactNode;
+  label: string; htmlFor: string; hint?: React.ReactNode; error?: string | null; children: React.ReactNode;
 }) {
   return (
     <div className="grid gap-1.5">

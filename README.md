@@ -26,8 +26,9 @@ the report**, with data accuracy and scientific rigor ranked above everything el
 - **Plugins** – biomedical signal processing (ECG/EEG), DICOM imaging, diagnostic statistics, human-activity
   datasets, literature search, report export, Zotero import. See [docs/PLUGIN_DEV.md](docs/PLUGIN_DEV.md).
 - **Bilingual UI** – Chinese / English, switchable at any time in Settings.
-- **One-click update** – Settings → About checks the latest release, downloads the installer, verifies its
-  sha256 and installs it while keeping your data. Nothing is checked unless you click.
+- **One-click update** – Settings → About checks the latest release (its release information must carry a valid
+  Ed25519 signature), downloads the installer, verifies its sha256, installs it while keeping your data and rolls
+  back if the new version does not start. Nothing is checked unless you click.
 
 ## Install (Windows)
 

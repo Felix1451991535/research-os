@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { ArrowLeft, FileText, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { codeLabel } from "@/i18n/taskStages";
 import { describeError } from "@/api/client";
 import { useEvents, useNotes, useProject, useTasks, useUpdateProject } from "@/api/queries";
 import type { Note, Project } from "@/api/types";
@@ -108,7 +109,7 @@ function Docs({ pid }: { pid: string }) {
           {(all) => { const docs = listedDocs(all); return docs.length === 0 ? <p className="text-body-sm text-muted-foreground">{t("project.noneYet")}</p> : (
             <ul className="divide-y">{docs.map((d) => (
               <li key={d.id}><Link className="flex justify-between gap-3 py-2 hover:text-primary" to={`/projects/${pid}/docs/${d.id}`}>
-                <span>{d.title || t("common.untitled")} <span className="text-caption text-muted-foreground">({d.kind})</span></span>
+                <span>{d.title || t("common.untitled")} <span className="text-caption text-muted-foreground">({codeLabel("docKinds", d.kind)})</span></span>
                 <span className="text-caption text-muted-foreground">{relativeTime(d.updated_at)}</span></Link></li>))}
             </ul>); }}
         </QueryView>

@@ -4,6 +4,9 @@ proposed through suggestion mode (the owner accepts), plus deterministic tail se
 evidence stays "insufficient material". Nothing is written from abstracts or model memory. Resumable: an answer saved
 before an interruption is reused; a field whose paid call may have run without a saved answer stops for inspection.
 `subject` holds the scope inputs ({"work_id"} or e.g. {"topic"}); questions are formatted with it.
+Fixed text (title, headings, "insufficient material", the owner placeholder) comes from the core catalog in the card's
+`language` (ADR-246; en default): headings are `card_<kind>_<key>`, the title prefix `card_<kind>_title`. Questions
+are model prompts and stay English; answers are model output and are not translated.
 """
 
 from __future__ import annotations
@@ -15,71 +18,76 @@ from typing import Any
 
 from ...contracts.errors import ApiError, not_found
 from ...kernel.db import jload, row, tx
+from ...sdk.texts import DEFAULT_LANGUAGE, Bound
 from ..content import docs
+from ..content.texts import CORE
 from ..gateway.gateway import Gateway
 from ..literature import citekeys
 from ..research import qa
 from . import insert, suggestions
 
-Tail = Callable[[sqlite3.Connection, dict[str, Any], dict[str, Any]], list[tuple[str, str, str]]]  # key, text, why
+Tail = Callable[[sqlite3.Connection, dict[str, Any], dict[str, Any], Bound],
+                list[tuple[str, str, str]]]  # key, text, why
 
 
 @dataclass(frozen=True)
 class CardSpec:
-    kind: str  # doc kind
-    title_prefix: str
-    fields: tuple[tuple[str, str, str], ...]  # (key, heading, question)
-    tail_sections: tuple[tuple[str, str], ...] = ()  # (key, heading) filled deterministically by `tail`
-    owner_section: str | None = None  # left for the owner, never filled
-    tail: Tail = field(default=lambda conn, subject, done: [])
+    kind: str  # doc kind; catalog codes card_<kind>_title / _<key> / _owner
+    fields: tuple[tuple[str, str], ...]  # (key, question)
+    tail_sections: tuple[str, ...] = ()  # keys filled deterministically by `tail`
+    owner_section: bool = False  # a `card_<kind>_owner` section left for the owner, never filled
+    tail: Tail = field(default=lambda conn, subject, done, T: [])
     scope: str = "work"  # work | project
+
+    def heading(self, T: Bound, key: str) -> str:
+        return T(f"card_{self.kind}_{key}")
 
 
 def marker(key: str) -> str:
-    return f"_(pending: {key})_"
+    return f"_(pending: {key})_"  # i18n-exempt: suggestion anchor (protocol), replaced before the owner reads
 
 
-def skeleton(conn: sqlite3.Connection, spec: CardSpec, subject: dict[str, Any]) -> str:
-    head = (f"{spec.title_prefix} for {{{{cite:{citekeys.assign(conn, subject['work_id'])}}}}}" if spec.scope == "work"
-            else f"{spec.title_prefix}: {subject['topic']}")
+def skeleton(conn: sqlite3.Connection, spec: CardSpec, subject: dict[str, Any], T: Bound) -> str:
+    prefix = spec.heading(T, "title")
+    head = (T("card_title_work", prefix=prefix, cite=f"{{{{cite:{citekeys.assign(conn, subject['work_id'])}}}}}")
+            if spec.scope == "work" else T("card_title", prefix=prefix, subject=subject["topic"]))
     lines = [head, ""]
-    for k, heading, _ in spec.fields:
-        lines += [f"## {heading}", "", marker(k), ""]
-    for k, heading in spec.tail_sections:
-        lines += [f"## {heading}", "", marker(k), ""]
+    for k in [*(f[0] for f in spec.fields), *spec.tail_sections]:
+        lines += [f"## {spec.heading(T, k)}", "", marker(k), ""]
     if spec.owner_section:
-        lines += [f"## {spec.owner_section}", "", "_(owner)_", ""]
+        lines += [f"## {spec.heading(T, 'owner')}", "", T("card_owner_placeholder"), ""]
     return "\n".join(lines)
 
 
-def _title(conn: sqlite3.Connection, spec: CardSpec, subject: dict[str, Any]) -> str:
+def _title(conn: sqlite3.Connection, spec: CardSpec, subject: dict[str, Any], T: Bound) -> str:
+    prefix = spec.heading(T, "title")
     if spec.scope != "work":
-        return f"{spec.title_prefix}: {subject['topic']}"
+        return T("card_title", prefix=prefix, subject=subject["topic"])
     work_id = subject["work_id"]
     w = row(conn.execute("SELECT title FROM works WHERE id=?", (work_id,)))
     if w is None:
         raise not_found("work")
     if row(conn.execute("SELECT 1 FROM document_versions WHERE work_id=? AND parse_state IN ('parsed','partial')",
                         (work_id,))) is None:
-        raise ApiError(409, "no_full_text", f"a {spec.title_prefix.lower()} needs a parsed full text of this work")
-    return f"{spec.title_prefix}: {w['title']}"
+        raise ApiError(409, "no_full_text", f"a {spec.kind.replace('_', ' ')} needs a parsed full text of this work")
+    return T("card_title", prefix=prefix, subject=w["title"])
 
 
 def _start(conn: sqlite3.Connection, doc_kinds: Any, spec: CardSpec, subject: dict[str, Any], project_id: str,
-           actor: str, progress: dict[str, Any], checkpoint: Callable[[], None]) -> None:
-    title = _title(conn, spec, subject)
+           actor: str, progress: dict[str, Any], checkpoint: Callable[[], None], T: Bound) -> None:
+    title = _title(conn, spec, subject, T)
     if "doc" not in progress:
         with tx(conn):
             progress["doc"] = docs.create_in_tx(conn, doc_kinds, project_id, spec.kind, title,
-                                                skeleton(conn, spec, subject), actor)
+                                                skeleton(conn, spec, subject, T), actor)
             progress["fields"] = {}
             checkpoint()
 
 
-def _field(conn: sqlite3.Connection, gw: Gateway, spec_field: tuple[str, str, str], doc: dict[str, Any],
+def _field(conn: sqlite3.Connection, gw: Gateway, spec_field: tuple[str, str], doc: dict[str, Any],
            subject: dict[str, Any], project_id: str, actor: str, progress: dict[str, Any],
-           checkpoint: Callable[[], None]) -> None:
-    k, heading, question = spec_field
+           checkpoint: Callable[[], None], T: Bound) -> None:
+    k, question = spec_field
     trace = f"card:{doc['id']}:{k}"
     a = row(conn.execute("SELECT id,status,body FROM answers WHERE trace_id=? ORDER BY created_at LIMIT 1", (trace,)))
     if a is None:
@@ -93,9 +101,9 @@ def _field(conn: sqlite3.Connection, gw: Gateway, spec_field: tuple[str, str, st
                                              work_id=subject.get("work_id")))
         a = row(conn.execute("SELECT id,status,body FROM answers WHERE id=?", (a["id"],))) or a
     try:
-        text = insert.answer_markdown(conn, a["id"], heading).split("\n", 2)[2].strip()
+        text, cited = insert.answer_markdown(conn, a["id"], k).split("\n", 2)[2].strip(), True
     except ApiError:
-        text = f"Insufficient material: no verified, cited statement answers this ({a['status']})."
+        text, cited = T("card_insufficient", status=a["status"]), False
     with tx(conn):
         s = suggestions.propose(conn, doc["id"], op="replace", anchor=marker(k), text=text, actor=actor,
                                 rationale=f"card field '{k}' from cited answer", source={"answer_id": a["id"]})
@@ -103,21 +111,22 @@ def _field(conn: sqlite3.Connection, gw: Gateway, spec_field: tuple[str, str, st
         for sentence in (jload(a.get("body")) or {}).get("sentences", []):
             kinds[str(sentence.get("kind"))] = kinds.get(str(sentence.get("kind")), 0) + 1
         progress["fields"][k] = {"answer_id": a["id"], "status": a["status"], "suggestion_id": s["id"],
-                                 "cited": not text.startswith("Insufficient material"), "kinds": kinds}
+                                 "cited": cited, "kinds": kinds}
         progress.pop("pending", None)
         checkpoint()
 
 
 def create(conn: sqlite3.Connection, gw: Gateway, doc_kinds: Any, spec: CardSpec, subject: dict[str, Any], *,
            project_id: str, actor: str, progress: dict[str, Any] | None = None,
-           checkpoint: Callable[[], None] = lambda: None) -> dict[str, Any]:
+           checkpoint: Callable[[], None] = lambda: None, language: str = DEFAULT_LANGUAGE) -> dict[str, Any]:
     progress = progress if progress is not None else {}
-    _start(conn, doc_kinds, spec, subject, project_id, actor, progress, checkpoint)
+    T = CORE.lang(language)
+    _start(conn, doc_kinds, spec, subject, project_id, actor, progress, checkpoint, T)
     doc = progress["doc"]
     for f in spec.fields:
         if f[0] not in progress["fields"]:
-            _field(conn, gw, f, doc, subject, project_id, actor, progress, checkpoint)
-    for k, text, rationale in spec.tail(conn, subject, progress["fields"]):
+            _field(conn, gw, f, doc, subject, project_id, actor, progress, checkpoint, T)
+    for k, text, rationale in spec.tail(conn, subject, progress["fields"], T):
         if k not in progress["fields"]:
             with tx(conn):
                 s = suggestions.propose(conn, doc["id"], op="replace", anchor=marker(k), text=text, actor=actor,

@@ -187,11 +187,26 @@ HEADING_SECTION = {
     "conclusion": "Conclusion",
     "conclusions": "Conclusion",
     "summary": "Conclusion",
+    # Chinese manuscript headings (ADR-234): recognised, so zh documents get the same slide sections
+    "背景": "Background",
+    "引言": "Background",
+    "研究背景": "Background",
+    "目的": "Objectives",
+    "研究目的": "Objectives",
+    "方法": "Method",
+    "材料与方法": "Method",
+    "研究方法": "Method",
+    "结果": "Results",
+    "结果与讨论": "Results",
+    "讨论": "Discussion",
+    "局限性": "Discussion",
+    "结论": "Conclusion",
+    "总结": "Conclusion",
 }
 
 
 def slide_section(heading: str) -> str | None:
-    key = re.sub(r"^\s*\d+(?:\.\d+)*\.?\s*", "", heading).strip().rstrip(":").casefold()
+    key = re.sub(r"^\s*\d+(?:\.\d+)*\.?\s*", "", heading).strip().rstrip(":：").casefold()
     return HEADING_SECTION.get(key)
 
 

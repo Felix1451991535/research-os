@@ -2,8 +2,9 @@
 
 scan a read root (PDFs only; others noted) -> hash (same bytes = one file) -> import into the CAS (internal write)
 -> identify: DOI/arXiv from the first two pages, matched against the library first, then the configured sources by
-exact identifier (never by title) -> citekey -> `<library>/<year|nd>/<citekey>.pdf` (`-v2`.. for other versions of
-the same work); unidentified -> `<library>/_unsorted/<original name>`. Nothing outside data_dir changes until the
+exact identifier -> citekey -> `<library>/<year|nd>/<citekey>.pdf` (`-v2`.. for other versions of the same work);
+unidentified -> `<library>/_unsorted/<original name>`; for those, the page-1 title only yields SUGGESTIONS for the
+owner to confirm (identify_title, ADR-233), never an automatic match. Nothing outside data_dir changes until the
 owner approves and applies the plan."""
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from ..knowledge.importer import import_document
 from ..knowledge.isolated import parse_isolated
 from ..knowledge.metadata import find_identifiers
 from ..knowledge.writer import DbKnowledgeWriter
-from . import candidates, citekeys, discovery
+from . import candidates, citekeys, discovery, identify_title
 
 MAX_FILES = 2000
 
@@ -38,6 +39,8 @@ class Found:
     work_id: str | None = None
     record: BibRecord | None = None
     target: str | None = None
+    title: str | None = None  # page-1 title guess (used only for suggestions)
+    suggestions: int = 0
 
 
 def scan(src_root: Path, notes: list[str]) -> list[Found]:
@@ -69,6 +72,7 @@ def _ids(f: Found, home: Path, notes: list[str]) -> None:
         return
     text = "\n".join(p.text for p in res.pages)
     f.ids = find_identifiers(text)
+    f.title = identify_title.title_guess(res.pages[0].text) if res.pages else None
 
 
 def _lookup(conn: sqlite3.Connection, ctx: discovery.Ctx, scheme: str, value: str
@@ -94,8 +98,11 @@ def _identify(conn: sqlite3.Connection, ctx: discovery.Ctx, writer: DbKnowledgeW
     if f.work_id:
         writer.attach_original(f.work_id, data, f.path.name, license=None, idempotency_key=f"organize:pdf:{f.sha}")
     else:
-        import_document(conn, writer.blobs, writer.kinds, data=data, filename=f.path.name,
-                        project_id=writer.project_id, actor=writer.actor, max_bytes=writer.max_bytes)
+        res = import_document(conn, writer.blobs, writer.kinds, data=data, filename=f.path.name,
+                              project_id=writer.project_id, actor=writer.actor, max_bytes=writer.max_bytes)
+        if f.title and not f.ids:
+            f.suggestions = len(identify_title.suggest(conn, ctx, str(res["version"]["version_id"]), f.title,
+                                                       sorted(ctx.ext.sources)))
 
 
 def _safe_name(name: str) -> str:
@@ -151,10 +158,11 @@ def propose(conn: sqlite3.Connection, ctx: discovery.Ctx, writer: DbKnowledgeWri
     _targets(conn, files, lib)
     ops = _ops(files, lib, mode)
     unsorted = sum(1 for f in files if f.work_id is None)
-    notes.append(f"{len(files)} PDFs: {len(files) - unsorted} identified, {unsorted} to _unsorted (review queue)")
+    notes.append(f"{len(files)} PDFs: {len(files) - unsorted} identified, {unsorted} to _unsorted (review queue); "
+                 f"{sum(f.suggestions > 0 for f in files)} with title matches to confirm")
     if not ops:
         return {"plan": None, "notes": notes}
     p = plan.propose(conn, kind="library_organize", title=f"Organise {src} -> {lib} ({mode})", ops=ops,
                      actor=ctx.actor, notes=notes, project_id=ctx.project_id)
     return {"plan": p, "notes": notes, "files": [{"src": str(f.path), "target": f.target, "work_id": f.work_id,
-                                                  "ids": f.ids} for f in files]}
+                                                  "ids": f.ids, "title_suggestions": f.suggestions} for f in files]}

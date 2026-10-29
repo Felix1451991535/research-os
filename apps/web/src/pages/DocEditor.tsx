@@ -14,8 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/AppShell";
 import { ErrorState, ListSkeleton } from "@/components/layout/state";
-import { ExportResult } from "@/components/ExportResult";
+import { ExportLanguageSelect, ExportResult, type ExportLanguage } from "@/components/ExportResult";
 import { newKey } from "@/lib/utils";
+import { diagnosticMessage, severityLabel } from "@/i18n/gateDiagnostics";
+import { codeLabel } from "@/i18n/taskStages";
 
 const EXPORTERS: readonly (readonly [string, ParseKeys])[] = [["markdown", "doc.exporterMarkdown"], ["report_docx", "doc.exporterWord"],
   ["report_latex", "doc.exporterLatex"], ["report_slides", "doc.exporterSlides"]];
@@ -36,7 +38,7 @@ function GatePanel({ id, version }: { id: string; version: number }) {
       </div>
       <ul className="grid gap-1 text-body-sm">
         {diagnostics.map((d, i) => <li key={i} className={d.severity === "error" ? "text-destructive" : "text-muted-foreground"}>
-          {d.severity}: {d.message}</li>)}
+          {severityLabel(d.severity)}: {diagnosticMessage(d)}</li>)}
       </ul>
     </div>
   );
@@ -74,8 +76,9 @@ function Editor({ doc }: { doc: WDoc }) {
   const save = useSaveDoc(doc.id);
   const decide = useDecide(doc.id);
   const exp = useExport(doc.id);
+  const [language, setLanguage] = useState<ExportLanguage>("en");
   const dirty = title !== doc.title || body !== doc.body;
-  const run = (exporter: string, mode: "draft" | "final") => exp.mutate({ exporter, mode, key: newKey() }, {
+  const run = (exporter: string, mode: "draft" | "final") => exp.mutate({ exporter, mode, language, key: newKey() }, {
     onSuccess: (r) => toast.success(t("doc.exportDone", { mode: mode === "final" ? t("doc.modeFinal") : t("doc.modeDraft"), status: r.status,
       files: r.files.map((f) => f.path.split("/").pop()).join(", ") })),
     onError: (e) => toast.error(describeError(e)),
@@ -93,6 +96,7 @@ function Editor({ doc }: { doc: WDoc }) {
               <Button variant="outline" size="sm" disabled={dirty || decide.isPending || exp.isPending} onClick={() => run(name, "final")}>{t(label)}</Button>
               <Button variant="ghost" size="sm" disabled={dirty || decide.isPending || exp.isPending} onClick={() => run(name, "draft")}>{t("doc.draftButton", { label: t(label) })}</Button>
             </span>))}
+          <ExportLanguageSelect id="doc-export-language" value={language} onChange={setLanguage} />
         </div>
       </div>
       <div className="grid content-start gap-4">
@@ -117,7 +121,7 @@ export function DocEditorPage() {
     <>
       <Link to={`/projects/${id}`} className="mb-3 inline-flex items-center gap-1 text-body-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" />{t("doc.back")}</Link>
-      <PageHeader title={q.data.title || t("common.untitled")} description={t("doc.meta", { kind: q.data.kind, version: q.data.version })} />
+      <PageHeader title={q.data.title || t("common.untitled")} description={t("doc.meta", { kind: codeLabel("docKinds", q.data.kind), version: q.data.version })} />
       <Editor key={q.data.version} doc={q.data} />  {/* new revision (save / accepted suggestion) -> fresh state */}
     </>
   );
